@@ -91,30 +91,25 @@ class QuanshengAdapter(RadioAdapter):
             
             logger.info(f"Serial port opened: {self._device} @ {self._baudrate} baud")
             
-            # Init sequence (from QuanshengDock):
-            # 1. Send \x00 to wake serial
-            # 2. Hello (0x0514) with magic timestamp -> enables gSetting_Remote_UI
-            #    Firmware starts sending UI elements (type 0-3, 7-8)
-            # 3. KeyPress Menu + Exit to activate display
+            self._set_state(RadioState.CONNECTED)
+            self._connected_since = time.time()
+            self._running = True
+            
+            # Start reader thread FIRST so we catch the init response
+            self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
+            self._reader_thread.start()
+            
+            # Now send init sequence
             self._serial.write(b'\x00')
             await asyncio.sleep(0.1)
-            self._serial.reset_input_buffer()  # Clear any junk
             
-            self._serial.write(build_hello())  # This enables remote UI mode!
+            self._serial.write(build_hello())  # Enables remote UI mode
             await asyncio.sleep(0.2)
             
             self._serial.write(build_key_press(Key.MENU))
             await asyncio.sleep(0.1)
             self._serial.write(build_key_press(Key.EXIT))
             await asyncio.sleep(0.1)
-            
-            self._set_state(RadioState.CONNECTED)
-            self._connected_since = time.time()
-            self._running = True
-            
-            # Start reader thread (blocking serial reads in background)
-            self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
-            self._reader_thread.start()
             
             # Start async heartbeat
             self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
