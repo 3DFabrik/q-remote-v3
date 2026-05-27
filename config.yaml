@@ -28,5 +28,5 @@ auth:
   users_file: "users.yaml"
 
 logging:
-  level: "INFO"               # DEBUG, INFO, WARNING, ERROR
+  level: "DEBUG"               # DEBUG, INFO, WARNING, ERROR
   format: "text"              # "json" or "text"

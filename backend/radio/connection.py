@@ -136,18 +136,17 @@ class QuanshengAdapter(RadioAdapter):
     # ─── Reader Thread ────────────────────────────────────────────
     
     def _reader_loop(self) -> None:
-        """Background thread: continuously read from serial port.
-        
-        Runs blocking serial.read() in a daemon thread to avoid
-        blocking the asyncio event loop.
-        """
+        """Background thread: continuously read from serial port."""
         logger.info("Serial reader thread started")
+        bytes_total = 0
         
         while self._running and self._serial and self._serial.is_open:
             try:
-                # Read available data (timeout=0.1 so we check _running regularly)
                 data = self._serial.read(4096)
                 if data:
+                    bytes_total += len(data)
+                    if bytes_total <= 100:
+                        logger.info(f"Serial data received: {len(data)} bytes (total: {bytes_total}), hex: {data[:20].hex()}")
                     self._parser.feed(data)
             except serial.SerialException as e:
                 logger.error(f"Serial read error: {e}")
