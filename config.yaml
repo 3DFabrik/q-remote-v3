@@ -4,7 +4,7 @@
 
 radio:
   device: "/dev/ttyACM0"
-  baudrate: 115200
+  baudrate: 38400
   timeout: 1.0
   reconnect_delay: 3.0        # seconds between reconnect attempts
   type: "uvk5"                # Radio type: "uvk5" (future: "hamlib")
