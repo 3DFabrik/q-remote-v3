@@ -11,16 +11,17 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from pathlib import Path
 
 from backend.config import load_config, get
 from backend.utils.logging import setup_logging
 from backend.radio.connection import QuanshengAdapter
 from backend.radio.adapter import RadioState
+from backend.control.socketio_server import set_radio, get_sio_app
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,10 @@ async def lifespan(app: FastAPI):
     
     # Connect to radio
     radio = QuanshengAdapter()
+    
+    # Wire up SocketIO with radio callbacks
+    set_radio(radio)
+    
     connected = await radio.connect()
     if connected:
         logger.info("Radio connected")
@@ -72,11 +77,15 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=get("server.cors_origins", ["*"]) if False else ["*"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount SocketIO
+socket_app = get_sio_app()
+app.mount('/ws', socket_app)
 
 
 # ─── REST API ─────────────────────────────────────────────────────
@@ -85,7 +94,7 @@ app.add_middleware(
 async def get_status():
     """Get current radio status and info."""
     if not radio:
-        return JSONResponse({"state": "unavailable"}, status_code=503)
+        return {"state": "unavailable"}
     
     info = await radio.get_info()
     return {
@@ -107,42 +116,6 @@ async def health_check():
         "radio": state,
         "version": "3.0.0",
     }
-
-
-@app.post("/api/key/{keycode}")
-async def send_key(keycode: int):
-    """Send a key press to the radio.
-    
-    Key codes: 0-9 = digits, 10-12 = func keys, 13=Menu, 14=Up, 15=Down, 16=PTT, 19=Exit
-    """
-    if not radio or radio.state != RadioState.CONNECTED:
-        return JSONResponse({"error": "Radio not connected"}, status_code=503)
-    
-    if keycode < 0 or keycode > 19:
-        return JSONResponse({"error": "Invalid keycode"}, status_code=400)
-    
-    await radio.send_key(keycode)
-    return {"ok": True, "keycode": keycode}
-
-
-@app.post("/api/ptt/{active}")
-async def set_ptt(active: bool):
-    """Engage (true) or release (false) PTT."""
-    if not radio or radio.state != RadioState.CONNECTED:
-        return JSONResponse({"error": "Radio not connected"}, status_code=503)
-    
-    await radio.set_ptt(active)
-    return {"ok": True, "ptt": active}
-
-
-@app.post("/api/rssi")
-async def request_rssi():
-    """Request an RSSI reading from the radio."""
-    if not radio or radio.state != RadioState.CONNECTED:
-        return JSONResponse({"error": "Radio not connected"}, status_code=503)
-    
-    dbm = await radio.get_rssi()
-    return {"rssi_dbm": round(dbm, 1)}
 
 
 # ─── Static Files ─────────────────────────────────────────────────

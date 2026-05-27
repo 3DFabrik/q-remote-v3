@@ -1,92 +1,92 @@
 /**
- * Q-Remote V3 – Main Application (ES Module)
+ * Q-Remote V3 – Main Application
  * 
- * Orchestrates all frontend modules. For Phase 1 this is a simple
- * REST-based version that will be enhanced with SocketIO + Audio WS
- * in later phases.
+ * Phase 2: SocketIO for real-time control + live LCD rendering.
  */
+
+import { control } from './control.js';
+import { DisplayRenderer } from './display.js';
 
 // ─── State ────────────────────────────────────────────────────────
 
 const state = {
-    connected: false,
+    radioConnected: false,
     pttActive: false,
-    rssiPolling: null,
 };
 
-// ─── DOM Elements ─────────────────────────────────────────────────
+// ─── DOM ──────────────────────────────────────────────────────────
 
 const statusEl = document.getElementById('status');
+const statusLight = document.getElementById('status-light');
 const pttBtn = document.getElementById('ptt-btn');
 const smeterValue = document.getElementById('smeter-value');
+const smeterBar = document.getElementById('smeter-bar');
 const lcdCanvas = document.getElementById('lcd');
-const lcdCtx = lcdCanvas.getContext('2d');
+
+// Display renderer
+const display = new DisplayRenderer(lcdCanvas);
 
 // ─── Init ─────────────────────────────────────────────────────────
 
 async function init() {
     console.log('Q-Remote V3 starting...');
     
-    // Check connection
-    await checkHealth();
+    // Setup control module
+    control.onConnect = () => {
+        console.log('SocketIO connected');
+        statusEl.textContent = 'CONNECTED';
+        statusLight.className = 'status-light on';
+    };
+    
+    control.onDisconnect = () => {
+        console.log('SocketIO disconnected');
+        statusEl.textContent = 'OFFLINE';
+        statusLight.className = 'status-light error';
+    };
+    
+    control.onRadioState = (radioState) => {
+        state.radioConnected = radioState === 'connected';
+        if (radioState === 'connected') {
+            statusEl.textContent = 'ONLINE';
+            statusLight.className = 'status-light on';
+        } else {
+            statusEl.textContent = radioState.toUpperCase();
+            statusLight.className = 'status-light' + (radioState === 'error' ? ' error' : '');
+        }
+    };
+    
+    control.onDisplayUpdate = (data) => {
+        display.processCommand(data);
+    };
+    
+    control.onRssiUpdate = (dbm, sUnit) => {
+        smeterValue.textContent = `${sUnit} ${dbm} dBm`;
+        // Map dBm to bar width: -130 = 0%, -73 (S9) = 70%, -40 = 100%
+        const pct = Math.max(0, Math.min(100, ((dbm + 130) / 90) * 100));
+        smeterBar.style.width = `${pct}%`;
+    };
+    
+    control.onPttStatus = (active, holder, error) => {
+        state.pttActive = active;
+        if (active) {
+            pttBtn.classList.add('active');
+        } else {
+            pttBtn.classList.remove('active');
+            if (error) {
+                console.warn('PTT error:', error);
+            }
+        }
+    };
+    
+    // Connect SocketIO
+    control.connect();
     
     // Wire up buttons
     setupButtons();
-    
-    // Wire up PTT
     setupPTT();
     
-    // Start polling
-    startPolling();
-    
-    // Init LCD
-    clearLCD();
-}
-
-// ─── API Calls ────────────────────────────────────────────────────
-
-async function api(method, path) {
-    try {
-        const res = await fetch(path, { method });
-        return await res.json();
-    } catch (e) {
-        console.error(`API ${method} ${path} failed:`, e);
-        return null;
-    }
-}
-
-async function checkHealth() {
-    const data = await api('GET', '/api/health');
-    const lightEl = document.getElementById('status-light');
-    if (data && data.radio === 'connected') {
-        state.connected = true;
-        statusEl.textContent = 'ONLINE';
-        lightEl.className = 'status-light on';
-    } else {
-        state.connected = false;
-        statusEl.textContent = (data?.radio || 'OFFLINE').toUpperCase();
-        lightEl.className = 'status-light' + (data ? ' error' : '');
-    }
-}
-
-async function updateStatus() {
-    const data = await api('GET', '/api/status');
-    if (!data) {
-        state.connected = false;
-        statusEl.textContent = 'Disconnected';
-        statusEl.className = 'error';
-        return;
-    }
-    
-    const lightEl = document.getElementById('status-light');
-    state.connected = data.state === 'connected';
-    statusEl.textContent = data.state.toUpperCase();
-    lightEl.className = 'status-light' + (state.connected ? ' on' : (data.state === 'error' ? ' error' : ''));
-    
-    // Update S-Meter
-    if (data.rssi_dbm !== undefined) {
-        smeterValue.textContent = `${data.s_unit} (${data.rssi_dbm} dBm)`;
-    }
+    // Start periodic RSSI requests
+    setInterval(() => control.requestRssi(), 1000);
 }
 
 // ─── Button Handling ──────────────────────────────────────────────
@@ -98,16 +98,13 @@ function setupButtons() {
         btn.addEventListener('pointerdown', (e) => {
             e.preventDefault();
             btn.classList.add('active');
-            api('POST', `/api/key/${keycode}`);
+            control.sendKey(keycode);
         });
         
-        btn.addEventListener('pointerup', () => {
-            btn.classList.remove('active');
-        });
-        
-        btn.addEventListener('pointerleave', () => {
-            btn.classList.remove('active');
-        });
+        const release = () => btn.classList.remove('active');
+        btn.addEventListener('pointerup', release);
+        btn.addEventListener('pointerleave', release);
+        btn.addEventListener('pointercancel', release);
     });
 }
 
@@ -116,53 +113,18 @@ function setupButtons() {
 function setupPTT() {
     pttBtn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        state.pttActive = true;
-        pttBtn.classList.add('active');
-        api('POST', '/api/ptt/true');
+        control.pttOn();
     });
     
-    const releasePTT = () => {
+    const release = () => {
         if (state.pttActive) {
-            state.pttActive = false;
-            pttBtn.classList.remove('active');
-            api('POST', '/api/ptt/false');
+            control.pttOff();
         }
     };
     
-    pttBtn.addEventListener('pointerup', releasePTT);
-    pttBtn.addEventListener('pointerleave', releasePTT);
-    pttBtn.addEventListener('pointercancel', releasePTT);
-}
-
-// ─── LCD ──────────────────────────────────────────────────────────
-
-function clearLCD() {
-    // Green phosphor CRT look
-    lcdCtx.fillStyle = '#0a0f0a';
-    lcdCtx.fillRect(0, 0, lcdCanvas.width, lcdCanvas.height);
-    
-    // Placeholder text in green phosphor
-    lcdCtx.fillStyle = '#00ff41';
-    lcdCtx.font = '10px monospace';
-    lcdCtx.textAlign = 'center';
-    lcdCtx.shadowColor = '#00ff41';
-    lcdCtx.shadowBlur = 4;
-    lcdCtx.fillText('Q-REMOTE V3', 64, 28);
-    lcdCtx.font = '7px monospace';
-    lcdCtx.fillStyle = '#00aa2a';
-    lcdCtx.shadowColor = '#00aa2a';
-    lcdCtx.shadowBlur = 2;
-    lcdCtx.fillText('AWAITING SIGNAL...', 64, 44);
-    lcdCtx.textAlign = 'left';
-    lcdCtx.shadowBlur = 0;
-}
-
-// ─── Polling ──────────────────────────────────────────────────────
-
-function startPolling() {
-    // Poll status every 2 seconds
-    setInterval(updateStatus, 2000);
-    updateStatus();
+    pttBtn.addEventListener('pointerup', release);
+    pttBtn.addEventListener('pointerleave', release);
+    pttBtn.addEventListener('pointercancel', release);
 }
 
 // ─── Go! ──────────────────────────────────────────────────────────

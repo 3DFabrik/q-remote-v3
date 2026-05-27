@@ -82,19 +82,19 @@ class RadioAdapter(ABC):
         """Request a screen dump from the radio."""
         ...
 
-    def on_state_change(self, callback: Callable[[RadioState], None]) -> None:
+    def on_state_change(self, callback) -> None:
         """Register a callback for connection state changes."""
         self._state_callback = callback
 
-    def on_display_update(self, callback: Callable[[list], None]) -> None:
+    def on_display_update(self, callback) -> None:
         """Register a callback for display data updates."""
         self._display_callback = callback
 
-    def on_rssi_update(self, callback: Callable[[float, str], None]) -> None:
+    def on_rssi_update(self, callback) -> None:
         """Register a callback for RSSI updates (dbm, s_unit)."""
         self._rssi_callback = callback
 
     # Callback storage (shared by all adapters)
-    _state_callback: Callable = None
-    _display_callback: Callable = None
-    _rssi_callback: Callable = None
+    _state_callback = None
+    _display_callback = None
+    _rssi_callback = None
