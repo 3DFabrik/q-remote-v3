@@ -23,7 +23,7 @@ class ControlModule {
     
     connect() {
         this.socket = io({
-            path: '/ws/socket.io',
+            path: '/socket.io',
             transports: ['websocket', 'polling'],
             reconnection: true,
             reconnectionDelay: 1000,

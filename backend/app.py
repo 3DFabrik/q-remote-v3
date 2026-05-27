@@ -21,7 +21,7 @@ from backend.config import load_config, get
 from backend.utils.logging import setup_logging
 from backend.radio.connection import QuanshengAdapter
 from backend.radio.adapter import RadioState
-from backend.control.socketio_server import set_radio, get_sio_app
+from backend.control.socketio_server import set_radio, sio
 
 logger = logging.getLogger(__name__)
 
@@ -83,9 +83,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount SocketIO
-socket_app = get_sio_app()
-app.mount('/ws', socket_app)
+# Mount SocketIO on the ASGI app level (not as a FastAPI sub-mount)
+# This way SocketIO handles /ws/socket.io/* and everything else goes to FastAPI
+import socketio as sio_module
+asgi_app = sio_module.ASGIApp(sio, other_asgi_app=app, socketio_path='socket.io')
 
 
 # ─── REST API ─────────────────────────────────────────────────────
