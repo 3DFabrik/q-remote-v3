@@ -42,6 +42,7 @@ class LCDDisplay:
                 log.error(f"LCD callback error: {e}")
 
     def process_ui_packet(self, ui_type, val1, val2, val3, data_len, data):
+        log.info(f"LCD process: type={ui_type} v1={val1} v2={val2} v3={val3} dlen={data_len}")
         if ui_type == 0:
             text = data.decode('ascii', errors='replace') if data else ""
             y = val2 + 1
