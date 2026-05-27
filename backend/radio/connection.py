@@ -2,22 +2,23 @@
 
 Handles:
 - Serial port connection with auto-reconnect
-- Packet sending and receiving
+- Packet sending and receiving (threaded reader to avoid blocking asyncio)
 - Connection lifecycle (heartbeat, init sequence)
 """
 
 import asyncio
 import logging
 import time
+import threading
 from typing import Optional, Callable
 
 import serial
 
 from backend.config import get
 from backend.radio.protocol import (
-    PacketParser, Packet, build_packet, build_key_press,
-    build_hello, build_get_screen, build_get_rssi,
-    Cmd, Key, xor_crypt,
+    PacketParser, Packet, build_key_press,
+    build_hello, build_get_rssi, build_get_screen,
+    Cmd, Key,
 )
 from backend.radio.adapter import RadioAdapter, RadioInfo, RadioState
 
@@ -25,30 +26,18 @@ logger = logging.getLogger(__name__)
 
 
 class QuanshengAdapter(RadioAdapter):
-    """Radio adapter for Quansheng UV-K5 via serial connection.
-    
-    Manages the serial connection, sends commands, parses responses,
-    and provides auto-reconnect on disconnection.
-    
-    Usage:
-        adapter = QuanshengAdapter()
-        adapter.on_display_update = lambda data: ...
-        adapter.on_rssi_update = lambda dbm, s_unit: ...
-        
-        await adapter.connect()
-        info = await adapter.get_info()
-    """
+    """Radio adapter for Quansheng UV-K5 via serial connection."""
     
     def __init__(self):
         self._serial: Optional[serial.Serial] = None
         self._state = RadioState.DISCONNECTED
         self._parser = PacketParser()
         self._info = RadioInfo()
-        self._last_heartbeat = 0.0
         self._connected_since = 0.0
-        self._reconnect_task: Optional[asyncio.Task] = None
-        self._reader_task: Optional[asyncio.Task] = None
+        self._reader_thread: Optional[threading.Thread] = None
+        self._running = False
         self._heartbeat_task: Optional[asyncio.Task] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
         
         # Wire up parser callbacks
         self._parser.on_packet = self._handle_packet
@@ -70,8 +59,20 @@ class QuanshengAdapter(RadioAdapter):
             self._state = new_state
             self._info.state = new_state
             logger.info(f"Radio state: {old.value} → {new_state.value}")
-            if self._state_callback:
-                self._state_callback(new_state)
+            if self._state_callback and self._loop:
+                # Schedule callback on the event loop (we might be in a thread)
+                self._loop.call_soon_threadsafe(
+                    lambda: asyncio.ensure_future(self._safe_callback(self._state_callback, new_state))
+                )
+    
+    async def _safe_callback(self, cb, *args):
+        """Safely call an async or sync callback."""
+        try:
+            result = cb(*args)
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception as e:
+            logger.error(f"Callback error: {e}")
     
     # ─── Connection ───────────────────────────────────────────────
     
@@ -79,17 +80,18 @@ class QuanshengAdapter(RadioAdapter):
         """Open serial port and initialize the radio connection."""
         try:
             self._set_state(RadioState.CONNECTING)
+            self._loop = asyncio.get_event_loop()
             
             self._serial = serial.Serial(
                 port=self._device,
                 baudrate=self._baudrate,
-                timeout=self._timeout,
-                write_timeout=self._timeout,
+                timeout=0.1,  # Short timeout for non-blocking reads
+                write_timeout=1.0,
             )
             
             logger.info(f"Serial port opened: {self._device} @ {self._baudrate} baud")
             
-            # Init sequence: test byte, then Menu + Exit to clear state
+            # Init sequence
             self._serial.write(b'\x00')
             await asyncio.sleep(0.1)
             self._serial.write(build_key_press(Key.MENU))
@@ -99,9 +101,13 @@ class QuanshengAdapter(RadioAdapter):
             
             self._set_state(RadioState.CONNECTED)
             self._connected_since = time.time()
+            self._running = True
             
-            # Start background tasks
-            self._reader_task = asyncio.create_task(self._read_loop())
+            # Start reader thread (blocking serial reads in background)
+            self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
+            self._reader_thread.start()
+            
+            # Start async heartbeat
             self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
             
             return True
@@ -109,16 +115,17 @@ class QuanshengAdapter(RadioAdapter):
         except serial.SerialException as e:
             logger.error(f"Failed to connect to radio: {e}")
             self._set_state(RadioState.ERROR)
-            # Start auto-reconnect
-            self._reconnect_task = asyncio.create_task(self._reconnect_loop())
             return False
     
     async def disconnect(self) -> None:
         """Close the serial connection and stop all background tasks."""
-        # Cancel background tasks
-        for task in [self._reader_task, self._heartbeat_task, self._reconnect_task]:
-            if task and not task.done():
-                task.cancel()
+        self._running = False
+        
+        if self._heartbeat_task and not self._heartbeat_task.done():
+            self._heartbeat_task.cancel()
+        
+        if self._reader_thread and self._reader_thread.is_alive():
+            self._reader_thread.join(timeout=2.0)
         
         if self._serial and self._serial.is_open:
             self._serial.close()
@@ -126,45 +133,40 @@ class QuanshengAdapter(RadioAdapter):
         
         self._set_state(RadioState.DISCONNECTED)
     
-    async def _reconnect_loop(self) -> None:
-        """Periodically attempt to reconnect."""
-        while self._state != RadioState.CONNECTED:
+    # ─── Reader Thread ────────────────────────────────────────────
+    
+    def _reader_loop(self) -> None:
+        """Background thread: continuously read from serial port.
+        
+        Runs blocking serial.read() in a daemon thread to avoid
+        blocking the asyncio event loop.
+        """
+        logger.info("Serial reader thread started")
+        
+        while self._running and self._serial and self._serial.is_open:
             try:
-                await asyncio.sleep(self._reconnect_delay)
-                logger.info("Attempting reconnect...")
-                if await self.connect():
-                    logger.info("Reconnected successfully")
-                    return
-            except asyncio.CancelledError:
-                return
-            except Exception as e:
-                logger.error(f"Reconnect failed: {e}")
-    
-    # ─── Background Tasks ─────────────────────────────────────────
-    
-    async def _read_loop(self) -> None:
-        """Continuously read from serial port and parse incoming data."""
-        try:
-            while self._state == RadioState.CONNECTED and self._serial:
-                if self._serial.in_waiting > 0:
-                    data = self._serial.read(self._serial.in_waiting)
+                # Read available data (timeout=0.1 so we check _running regularly)
+                data = self._serial.read(4096)
+                if data:
                     self._parser.feed(data)
-                else:
-                    await asyncio.sleep(0.01)  # 10ms poll interval
-        except asyncio.CancelledError:
-            return
-        except Exception as e:
-            logger.error(f"Serial read error: {e}")
-            self._set_state(RadioState.ERROR)
-            self._reconnect_task = asyncio.create_task(self._reconnect_loop())
+            except serial.SerialException as e:
+                logger.error(f"Serial read error: {e}")
+                if self._running:
+                    self._set_state(RadioState.ERROR)
+                break
+            except Exception as e:
+                logger.error(f"Reader error: {e}")
+        
+        logger.info("Serial reader thread stopped")
+    
+    # ─── Heartbeat ────────────────────────────────────────────────
     
     async def _heartbeat_loop(self) -> None:
         """Send periodic Hello packets to keep the connection alive."""
         try:
-            while self._state == RadioState.CONNECTED:
+            while self._running and self._state == RadioState.CONNECTED:
                 self._send_raw(build_hello())
-                self._last_heartbeat = time.time()
-                await asyncio.sleep(5.0)  # Heartbeat every 5 seconds
+                await asyncio.sleep(5.0)
         except asyncio.CancelledError:
             return
         except Exception as e:
@@ -173,15 +175,14 @@ class QuanshengAdapter(RadioAdapter):
     # ─── Send Helpers ─────────────────────────────────────────────
     
     def _send_raw(self, data: bytes) -> None:
-        """Send raw bytes to serial port."""
+        """Send raw bytes to serial port (thread-safe)."""
         if self._serial and self._serial.is_open:
             try:
                 self._serial.write(data)
             except serial.SerialException as e:
                 logger.error(f"Serial write error: {e}")
-                self._set_state(RadioState.ERROR)
     
-    # ─── Packet Handlers ──────────────────────────────────────────
+    # ─── Packet Handlers (called from reader thread) ──────────────
     
     def _handle_packet(self, packet: Packet) -> None:
         """Handle a parsed binary protocol packet from the radio."""
@@ -189,42 +190,56 @@ class QuanshengAdapter(RadioAdapter):
         
         if cmd == Cmd.RSSI_INFO:
             rssi_raw = int.from_bytes(packet.params[:2], 'little')
-            dbm = rssi_to_dbm_safe(rssi_raw)
+            dbm = -(rssi_raw & 0x3FF) / 2.0
+            
+            # S-unit conversion
+            s_points = [
+                (-121, "S1"), (-115, "S2"), (-109, "S3"), (-103, "S4"),
+                (-97, "S5"), (-91, "S6"), (-85, "S7"), (-79, "S8"), (-73, "S9"),
+            ]
+            s_unit = "S9+"
+            for threshold, label in s_points:
+                if dbm <= threshold:
+                    s_unit = label
+                    break
+            
             self._info.rssi_dbm = dbm
-            self._info.s_unit = dbm_to_s_unit_safe(dbm)
-            if self._rssi_callback:
-                self._rssi_callback(dbm, self._info.s_unit)
-        
-        elif cmd == Cmd.REGISTER_INFO:
-            logger.debug(f"Register info: {packet.params.hex()}")
+            self._info.s_unit = s_unit
+            
+            if self._rssi_callback and self._loop:
+                self._loop.call_soon_threadsafe(
+                    lambda: asyncio.ensure_future(
+                        self._safe_callback(self._rssi_callback, dbm, s_unit)
+                    )
+                )
         
         elif cmd == Cmd.IM_HERE:
             logger.debug("Radio acknowledged heartbeat")
         
         else:
-            logger.debug(f"Unhandled packet: cmd=0x{cmd:04X} params={packet.params.hex()}")
+            logger.debug(f"Packet: cmd=0x{cmd:04X} params={packet.params.hex()}")
     
     def _handle_ui_data(self, data: bytes) -> None:
         """Handle a UI text rendering packet from the radio."""
-        # Forward to display callback
-        if self._display_callback:
-            self._display_callback(data)
+        logger.debug(f"UI data: type={data[0] if data else '?'} len={len(data)}")
+        
+        if self._display_callback and self._loop:
+            data_list = list(data)
+            self._loop.call_soon_threadsafe(
+                lambda: asyncio.ensure_future(
+                    self._safe_callback(self._display_callback, data_list)
+                )
+            )
     
     # ─── RadioAdapter Interface ───────────────────────────────────
     
     async def get_info(self) -> RadioInfo:
-        """Get current radio status."""
         return self._info
     
     async def send_key(self, keycode: int, hold: bool = False) -> None:
-        """Send a key press to the radio."""
         self._send_raw(build_key_press(keycode))
     
     async def set_ptt(self, active: bool) -> None:
-        """Engage or release PTT.
-        
-        For Standard Mode: KeyPress(16) for TX, KeyPress(19) for release.
-        """
         if active:
             self._info.is_transmitting = True
             self._send_raw(build_key_press(Key.PTT))
@@ -233,21 +248,8 @@ class QuanshengAdapter(RadioAdapter):
             self._send_raw(build_key_press(Key.EXIT))
     
     async def get_rssi(self) -> float:
-        """Request RSSI and return last known value."""
         self._send_raw(build_get_rssi())
         return self._info.rssi_dbm
     
     async def request_display(self) -> None:
-        """Request a screen dump from the radio."""
         self._send_raw(build_get_screen())
-
-
-# ─── Helper functions (avoid circular imports) ────────────────────
-
-def rssi_to_dbm_safe(rssi_raw: int) -> float:
-    from backend.radio.protocol import rssi_to_dbm
-    return rssi_to_dbm(rssi_raw)
-
-def dbm_to_s_unit_safe(dbm: float) -> str:
-    from backend.radio.protocol import dbm_to_s_unit
-    return dbm_to_s_unit(dbm)
