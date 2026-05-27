@@ -1,12 +1,5 @@
 """SocketIO server for real-time control communication.
-
-Handles:
-- Display updates (LCD rendering data broadcast to all clients)
-- Button/key presses from clients to radio
-- PTT control
-- RSSI/S-Meter updates
-- Connection status changes
-- Client management (who's connected, PTT lock)
+Adapted to work with V1's RadioConnection.
 """
 
 import asyncio
@@ -15,11 +8,10 @@ from typing import Optional
 
 import socketio
 
-from backend.radio.adapter import RadioState
+from backend.radio.connection import RadioConnection
+from backend.radio.protocol import Packet
 
 logger = logging.getLogger(__name__)
-
-# ─── SocketIO Server (async mode) ─────────────────────────────────
 
 sio = socketio.AsyncServer(
     async_mode='asgi',
@@ -28,138 +20,131 @@ sio = socketio.AsyncServer(
     ping_timeout=10,
 )
 
-# Shared state
-_radio = None          # Will be set by app.py
-_ptt_owner: Optional[str] = None   # Session ID of current PTT holder
+radio: Optional[RadioConnection] = None
+_ptt_owner: Optional[str] = None
 
 
-def set_radio(radio):
-    """Set the radio adapter reference (called from app.py)."""
-    global _radio
-    _radio = radio
-    
-    # Wire up radio callbacks
-    radio.on_display_update = _on_display_update
-    radio.on_rssi_update = _on_rssi_update
-    radio.on_state_change = _on_state_change
+def init_radio():
+    """Create and configure the radio connection."""
+    global radio
+    radio = RadioConnection()
+
+    # Wire up callbacks
+    radio.on_ui = _on_ui
+    radio.on_rssi = _on_rssi
+    radio.on_connect = _on_radio_connect
+    radio.on_disconnect = _on_radio_disconnect
+
+    return radio
 
 
 def get_sio_app():
-    """Get the ASGI application for mounting in FastAPI."""
-    return socketio.ASGIApp(sio)
+    return socketio.ASGIApp(sio, socketio_path='socket.io')
 
 
-# ─── Radio Callbacks → SocketIO Broadcasts ────────────────────────
+# ─── Radio Callbacks ─────────────────────────────────────────────
 
-async def _on_display_update(data: bytes):
-    """Radio sent display data → broadcast to all clients."""
-    await sio.emit('display', {'data': list(data)})
-
-
-async def _on_rssi_update(dbm: float, s_unit: str):
-    """Radio sent RSSI update → broadcast to all clients."""
-    await sio.emit('rssi', {'dbm': round(dbm, 1), 's_unit': s_unit})
-
-
-async def _on_state_change(state: RadioState):
-    """Radio connection state changed → broadcast to all clients."""
-    await sio.emit('radio_state', {'state': state.value})
+async def _on_ui(ui_type, val1, val2, val3, data_len, data):
+    """Radio sent UI data → broadcast to all clients."""
+    await sio.emit('display', {
+        'type': ui_type,
+        'val1': val1,
+        'val2': val2,
+        'val3': val3,
+        'dataLen': data_len,
+        'data': list(data) if data else [],
+    })
 
 
-# ─── Connection Events ────────────────────────────────────────────
+async def _on_rssi(raw_data):
+    """Radio sent RSSI → parse and broadcast."""
+    if len(raw_data) >= 4:
+        rssi_raw = raw_data[2] | (raw_data[3] << 8)
+        dbm = -(rssi_raw & 0x3FF) / 2.0
+
+        s_points = [
+            (-121, "S1"), (-115, "S2"), (-109, "S3"), (-103, "S4"),
+            (-97, "S5"), (-91, "S6"), (-85, "S7"), (-79, "S8"), (-73, "S9"),
+        ]
+        s_unit = "S9+"
+        for threshold, label in s_points:
+            if dbm <= threshold:
+                s_unit = label
+                break
+
+        await sio.emit('rssi', {'dbm': round(dbm, 1), 's_unit': s_unit})
+
+
+async def _on_radio_connect():
+    await sio.emit('radio_state', {'state': 'connected'})
+
+
+async def _on_radio_disconnect():
+    global _ptt_owner
+    _ptt_owner = None
+    await sio.emit('radio_state', {'state': 'disconnected'})
+
+
+# ─── SocketIO Events ─────────────────────────────────────────────
 
 @sio.event
 async def connect(sid, environ):
-    """Client connected."""
     logger.info(f"Client connected: {sid}")
-    
-    # Send current radio state
-    if _radio:
-        info = await _radio.get_info()
-        await sio.emit('radio_state', {'state': info.state.value}, to=sid)
+    if radio and radio.connected:
+        await sio.emit('radio_state', {'state': 'connected'}, to=sid)
+    else:
+        await sio.emit('radio_state', {'state': 'disconnected'}, to=sid)
 
 
 @sio.event
 async def disconnect(sid):
-    """Client disconnected."""
     global _ptt_owner
     logger.info(f"Client disconnected: {sid}")
-    
-    # Release PTT if this client was holding it
     if _ptt_owner == sid:
-        if _radio:
-            await _radio.set_ptt(False)
+        if radio:
+            radio.send_key(13)  # Release PTT (EXIT key)
         _ptt_owner = None
         await sio.emit('ptt_status', {'active': False, 'holder': None})
 
 
-# ─── Control Events (Client → Server → Radio) ────────────────────
-
 @sio.event
 async def key_press(sid, data):
-    """Client pressed a key on the radio.
-    
-    Expected data: {'keycode': int}
-    """
-    keycode = data.get('keycode')
-    if keycode is None or keycode < 0 or keycode > 19:
-        logger.warning(f"Invalid keycode from {sid}: {keycode}")
-        return
-    
-    if not _radio or _radio.state != RadioState.CONNECTED:
-        return
-    
-    await _radio.send_key(keycode)
-    logger.debug(f"Key press from {sid}: {keycode}")
+    keycode = data.get('keycode', 0)
+    if radio and radio.connected:
+        radio.send_key(keycode)
 
 
 @sio.event
 async def ptt_on(sid, data=None):
-    """Client requests PTT on (start transmitting).
-    
-    Only one client can hold PTT at a time.
-    """
     global _ptt_owner
-    
-    if not _radio or _radio.state != RadioState.CONNECTED:
-        await sio.emit('ptt_status', {'active': False, 'error': 'Radio not connected'}, to=sid)
+    if not radio or not radio.connected:
         return
-    
     if _ptt_owner is not None and _ptt_owner != sid:
-        await sio.emit('ptt_status', {'active': False, 'error': 'PTT locked by another user'}, to=sid)
+        await sio.emit('ptt_status', {'active': False, 'error': 'PTT locked'}, to=sid)
         return
-    
     _ptt_owner = sid
-    await _radio.set_ptt(True)
+    radio.send_key(16)  # V1 PTT key code
     await sio.emit('ptt_status', {'active': True, 'holder': sid})
-    logger.info(f"PTT ON from {sid}")
 
 
 @sio.event
 async def ptt_off(sid, data=None):
-    """Client releases PTT (stop transmitting)."""
     global _ptt_owner
-    
     if _ptt_owner != sid:
-        return  # Can't release what you don't hold
-    
-    if _radio:
-        await _radio.set_ptt(False)
-    
+        return
+    if radio:
+        radio.send_key(13)  # V1 EXIT key = PTT release
     _ptt_owner = None
     await sio.emit('ptt_status', {'active': False, 'holder': None})
-    logger.info(f"PTT OFF from {sid}")
 
 
 @sio.event
 async def request_rssi(sid, data=None):
-    """Client requests an RSSI reading."""
-    if _radio and _radio.state == RadioState.CONNECTED:
-        await _radio.get_rssi()
+    if radio and radio.connected:
+        radio.request_rssi()
 
 
 @sio.event
 async def request_display(sid, data=None):
-    """Client requests a screen dump."""
-    if _radio and _radio.state == RadioState.CONNECTED:
-        await _radio.request_display()
+    if radio and radio.connected:
+        radio.request_screen()

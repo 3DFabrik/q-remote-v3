@@ -55,8 +55,8 @@ async function init() {
         }
     };
     
-    control.onDisplayUpdate = (data) => {
-        display.processCommand(data);
+    control.onDisplayUpdate = (evt) => {
+        display.processEvent(evt);
     };
     
     control.onRssiUpdate = (dbm, sUnit) => {
