@@ -85,7 +85,7 @@ class QuanshengAdapter(RadioAdapter):
             self._serial = serial.Serial(
                 port=self._device,
                 baudrate=self._baudrate,
-                timeout=0.1,  # Short timeout for non-blocking reads
+                timeout=1.0,  # Must be >=1s for reliable reads
                 write_timeout=1.0,
             )
             
@@ -143,24 +143,29 @@ class QuanshengAdapter(RadioAdapter):
         """Background thread: continuously read from serial port."""
         logger.info("Serial reader thread started")
         bytes_total = 0
+        error_count = 0
         
         while self._running and self._serial and self._serial.is_open:
             try:
                 data = self._serial.read(4096)
                 if data:
                     bytes_total += len(data)
-                    if bytes_total <= 100:
-                        logger.info(f"Serial data received: {len(data)} bytes (total: {bytes_total}), hex: {data[:20].hex()}")
+                    logger.info(f"Serial: {len(data)} bytes (total: {bytes_total}), first: {data[:10].hex()}")
                     self._parser.feed(data)
+                    error_count = 0
+                # else: timeout, no data, just loop
             except serial.SerialException as e:
-                logger.error(f"Serial read error: {e}")
-                if self._running:
-                    self._set_state(RadioState.ERROR)
-                break
+                error_count += 1
+                logger.error(f"Serial read error ({error_count}): {e}")
+                if error_count > 5 or not self._running:
+                    break
             except Exception as e:
-                logger.error(f"Reader error: {e}")
+                error_count += 1
+                logger.error(f"Reader error ({error_count}): {e}")
+                if error_count > 5:
+                    break
         
-        logger.info("Serial reader thread stopped")
+        logger.info(f"Serial reader stopped (total bytes read: {bytes_total})")
     
     # ─── Heartbeat ────────────────────────────────────────────────
     
