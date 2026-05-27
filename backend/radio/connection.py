@@ -152,8 +152,21 @@ class RadioConnection:
             log.debug(f"Cmd: 0x{cmd:04X} ({len(data)} bytes)")
 
     def _on_ui_callback(self, ui_type, val1, val2, val3, data_len, data):
-        log.debug(f"UI: type={ui_type} v1={val1} v2={val2} v3={val3} dlen={data_len}")
-        self._safe_emit('on_ui', ui_type, val1, val2, val3, data_len, data)
+        # This is called from the reader THREAD (not async)
+        # Schedule the async handler on the event loop
+        if self._loop:
+            self._loop.call_soon_threadsafe(
+                lambda: asyncio.ensure_future(
+                    self._async_ui(ui_type, val1, val2, val3, data_len, data)
+                )
+            )
+
+    async def _async_ui(self, ui_type, val1, val2, val3, data_len, data):
+        if self.on_ui:
+            try:
+                await self.on_ui(ui_type, val1, val2, val3, data_len, data)
+            except Exception as e:
+                log.error(f"UI callback error: {e}")
 
     def _safe_emit(self, callback_name, *args):
         """Call an async callback on the event loop from the reader thread."""
