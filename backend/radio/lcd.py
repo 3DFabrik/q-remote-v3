@@ -29,8 +29,10 @@ class LCDDisplay:
 
     def flush(self):
         now = time.time()
-        if now - self._last_push < 0.1:
+        delta = now - self._last_push
+        if delta < 0.1:
             return
+        log.info(f"LCD flush: delta={delta:.3f}s, callbacks={len(self._change_callbacks)}")
         self._last_push = now
         state = self.get_state()
         # Always push for now (debug)
