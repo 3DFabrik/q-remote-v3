@@ -162,6 +162,7 @@ class RadioConnection:
             )
 
     async def _async_ui(self, ui_type, val1, val2, val3, data_len, data):
+        log.info(f"Async UI called: type={ui_type} v1={val1}")
         if self.on_ui:
             try:
                 await self.on_ui(ui_type, val1, val2, val3, data_len, data)
