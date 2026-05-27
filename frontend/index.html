@@ -8,41 +8,59 @@
 </head>
 <body>
     <div id="app">
+        <!-- Title Plate -->
         <header>
-            <h1>🤖 Q-Remote V3</h1>
-            <div id="status">Connecting...</div>
+            <h1>Q-Remote V3</h1>
+            <div class="status-indicator">
+                <div id="status-light" class="status-light"></div>
+                <span id="status">INIT</span>
+            </div>
         </header>
-        
-        <main>
-            <!-- LCD Display -->
-            <section id="display-section">
+
+        <!-- CRT Display Panel -->
+        <div id="crt-bezel" class="instrument-panel">
+            <div class="panel-label">Display — CRT Type 564</div>
+            <div id="display-section">
                 <canvas id="lcd" width="128" height="64"></canvas>
-            </section>
-            
-            <!-- S-Meter -->
-            <section id="smeter-section">
-                <div id="smeter">
+            </div>
+        </div>
+
+        <!-- S-Meter Panel -->
+        <div class="instrument-panel">
+            <div class="panel-label">Signal Strength — S-Meter</div>
+            <div id="smeter">
+                <div id="smeter-bar-track">
                     <div id="smeter-bar"></div>
-                    <span id="smeter-value">--</span>
                 </div>
-            </section>
-            
-            <!-- Controls -->
+                <span id="smeter-value">S0 —</span>
+            </div>
+        </div>
+
+        <!-- Controls Panel -->
+        <div class="instrument-panel">
+            <div class="panel-label">Transmitter Control</div>
             <section id="controls">
-                <div class="button-row">
-                    <button class="radio-btn" data-key="10">F1</button>
-                    <button class="radio-btn" data-key="11">F2</button>
-                    <button class="radio-btn" data-key="12">F3</button>
+                <!-- Function Keys -->
+                <div class="control-row">
+                    <button class="radio-btn func-key" data-key="10">F1</button>
+                    <button class="radio-btn func-key" data-key="11">F2</button>
+                    <button class="radio-btn func-key" data-key="12">F3</button>
                 </div>
-                <div class="button-row">
-                    <button class="radio-btn" data-key="13">Menu</button>
-                    <button class="radio-btn" data-key="19">Exit</button>
+
+                <!-- Navigation -->
+                <div class="control-row">
+                    <button class="radio-btn nav-key" data-key="13">MENU</button>
+                    <button class="radio-btn nav-key" data-key="19">EXIT</button>
                 </div>
-                <div class="button-row">
-                    <button class="radio-btn" data-key="14">▲</button>
-                    <button class="radio-btn" data-key="15">▼</button>
+
+                <!-- Arrows -->
+                <div class="control-row">
+                    <button class="radio-btn arrow-key" data-key="14">▲</button>
+                    <button class="radio-btn arrow-key" data-key="15">▼</button>
                 </div>
-                <div class="button-grid">
+
+                <!-- Numeric Keypad -->
+                <div class="control-grid">
                     <button class="radio-btn" data-key="1">1</button>
                     <button class="radio-btn" data-key="2">2</button>
                     <button class="radio-btn" data-key="3">3</button>
@@ -54,15 +72,16 @@
                     <button class="radio-btn" data-key="9">9</button>
                     <button class="radio-btn" data-key="0">0</button>
                 </div>
-                
+
                 <!-- PTT -->
                 <div id="ptt-container">
-                    <button id="ptt-btn" class="ptt-button">PTT</button>
+                    <button id="ptt-btn" class="ptt-button">TRANSMIT</button>
                 </div>
+                <div class="engraved">Push to Talk — Release to Listen</div>
             </section>
-        </main>
+        </div>
     </div>
-    
+
     <script type="module" src="/static/js/app.js"></script>
 </body>
 </html>

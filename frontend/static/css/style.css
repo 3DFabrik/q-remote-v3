@@ -1,163 +1,447 @@
-/* Q-Remote V3 – Main Stylesheet */
+/* Q-Remote V3 – Saturn V / Mission Control Theme */
+/* 1960s NASA Tektronix Oscilloscope aesthetic */
+
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 
 :root {
-    --bg: #1a1a2e;
-    --surface: #16213e;
-    --border: #0f3460;
-    --accent: #e94560;
-    --text: #eee;
-    --text-dim: #888;
-    --green: #4caf50;
-    --yellow: #ff9800;
-    --red: #f44336;
+    /* Panel Colors */
+    --panel: #b8b0a0;
+    --panel-dark: #a09888;
+    --panel-light: #cec6b6;
+    --panel-border: #706858;
+    --panel-inner: #504840;
+    
+    /* CRT / Phosphor */
+    --phosphor: #00ff41;
+    --phosphor-dim: #00aa2a;
+    --phosphor-glow: #33ff66;
+    --crt-bg: #0a0f0a;
+    
+    /* Indicators */
+    --amber: #ffaa00;
+    --amber-glow: #ffcc44;
+    --red: #cc2200;
+    --red-glow: #ff4422;
+    --green: #00cc44;
+    --white: #e8e0d0;
+    
+    /* Typography */
+    --font-mono: 'Share Tech Mono', 'Courier New', monospace;
+    --font-label: 'Share Tech Mono', monospace;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-    font-family: 'Segoe UI', system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--text);
+    font-family: var(--font-mono);
+    background: #2a2520;
+    color: var(--white);
     min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 12px;
+    /* Brushed metal texture */
+    background-image: 
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 2px,
+            rgba(0,0,0,0.03) 2px,
+            rgba(0,0,0,0.03) 4px
+        );
 }
 
+/* ─── Main Panel (Equipment Rack) ──────────────────────────────── */
+
 #app {
-    max-width: 420px;
-    margin: 0 auto;
-    padding: 16px;
+    max-width: 480px;
+    width: 100%;
 }
+
+.instrument-panel {
+    background: var(--panel);
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 12px;
+    border: 2px solid var(--panel-border);
+    box-shadow: 
+        inset 0 1px 0 rgba(255,255,255,0.3),
+        inset 0 -1px 0 rgba(0,0,0,0.2),
+        0 4px 12px rgba(0,0,0,0.5);
+    position: relative;
+}
+
+/* Panel screws */
+.instrument-panel::before,
+.instrument-panel::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 40%, #888, #555);
+    border: 1px solid #444;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+}
+.instrument-panel::before { top: 6px; left: 6px; }
+.instrument-panel::after { top: 6px; right: 6px; }
+
+.panel-label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: #504840;
+    text-align: center;
+    margin-bottom: 10px;
+    padding-top: 4px;
+    font-weight: bold;
+}
+
+/* ─── Header ───────────────────────────────────────────────────── */
 
 header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
-}
-
-header h1 { font-size: 1.2rem; }
-
-#status {
-    font-size: 0.85rem;
-    padding: 4px 12px;
-    border-radius: 12px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-}
-
-#status.connected { color: var(--green); border-color: var(--green); }
-#status.error { color: var(--red); border-color: var(--red); }
-
-/* LCD Display */
-#display-section {
-    background: #000;
-    border-radius: 8px;
-    padding: 12px;
+    padding: 12px 16px;
+    background: linear-gradient(180deg, #c8c0b0 0%, #b0a898 100%);
+    border: 2px solid var(--panel-border);
+    border-radius: 6px;
     margin-bottom: 12px;
-    border: 2px solid var(--border);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+header h1 {
+    font-size: 1rem;
+    color: #333;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.status-indicator {
     display: flex;
-    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #555;
+}
+
+.status-light {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #666;
+    border: 1px solid #444;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+}
+
+.status-light.on {
+    background: var(--green);
+    box-shadow: 
+        inset 0 1px 2px rgba(255,255,255,0.3),
+        0 0 8px var(--green),
+        0 0 16px rgba(0,204,68,0.3);
+}
+
+.status-light.error {
+    background: var(--red);
+    box-shadow: 
+        inset 0 1px 2px rgba(255,255,255,0.3),
+        0 0 8px var(--red),
+        0 0 16px rgba(204,34,0,0.3);
+}
+
+/* ─── CRT Display ──────────────────────────────────────────────── */
+
+#crt-bezel {
+    background: var(--panel-inner);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    border: 2px solid var(--panel-border);
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
+}
+
+#display-section {
+    position: relative;
+    background: var(--crt-bg);
+    border-radius: 16px;
+    padding: 12px;
+    border: 3px solid #333;
+    box-shadow: 
+        inset 0 0 30px rgba(0,255,65,0.05),
+        inset 0 0 60px rgba(0,0,0,0.8);
+    overflow: hidden;
+}
+
+/* CRT scanlines overlay */
+#display-section::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.15) 2px,
+        rgba(0,0,0,0.15) 4px
+    );
+    pointer-events: none;
+    border-radius: 16px;
+}
+
+/* CRT curvature / glow */
+#display-section::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(
+        ellipse at center,
+        transparent 60%,
+        rgba(0,0,0,0.4) 100%
+    );
+    pointer-events: none;
+    border-radius: 16px;
+    z-index: 1;
 }
 
 #lcd {
     width: 100%;
-    max-width: 256px;
+    max-width: 280px;
+    display: block;
+    margin: 0 auto;
     image-rendering: pixelated;
-    background: #8bac0f;
     border-radius: 4px;
+    filter: brightness(1.1);
 }
 
-/* S-Meter */
+/* ─── S-Meter ──────────────────────────────────────────────────── */
+
 #smeter-section {
     margin-bottom: 12px;
 }
 
 #smeter {
-    background: var(--surface);
+    background: var(--panel-inner);
     border-radius: 8px;
-    padding: 8px 16px;
+    padding: 12px 20px;
     display: flex;
     align-items: center;
-    gap: 12px;
-    border: 1px solid var(--border);
+    gap: 16px;
+    border: 2px solid var(--panel-border);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+}
+
+#smeter-bar-track {
+    flex: 1;
+    height: 20px;
+    background: #1a1a1a;
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid #333;
+    position: relative;
 }
 
 #smeter-bar {
-    flex: 1;
-    height: 12px;
-    background: var(--bg);
-    border-radius: 6px;
-    overflow: hidden;
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--phosphor) 0%, var(--amber) 70%, var(--red) 100%);
+    border-radius: 2px;
+    transition: width 0.15s ease-out;
+    box-shadow: 0 0 8px rgba(0,255,65,0.3);
 }
 
 #smeter-value {
-    font-family: monospace;
-    font-size: 0.9rem;
-    min-width: 50px;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--phosphor);
+    min-width: 80px;
     text-align: right;
+    text-shadow: 0 0 6px rgba(0,255,65,0.5);
 }
 
-/* Controls */
-#controls { margin-top: 8px; }
+/* ─── Controls Panel ───────────────────────────────────────────── */
 
-.button-row {
+#controls {
+    margin-top: 8px;
+}
+
+.control-row {
     display: flex;
-    gap: 8px;
-    margin-bottom: 8px;
+    gap: 10px;
+    margin-bottom: 10px;
     justify-content: center;
 }
 
-.button-grid {
+.control-grid {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 6px;
+    gap: 8px;
     margin-bottom: 12px;
+    padding: 0 4px;
 }
 
+/* ─── Buttons ──────────────────────────────────────────────────── */
+
 .radio-btn {
-    background: var(--surface);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 16px;
-    font-size: 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--white);
+    background: linear-gradient(180deg, #666 0%, #444 40%, #333 100%);
+    border: 1px solid #222;
+    border-radius: 4px;
+    padding: 10px 14px;
     cursor: pointer;
-    transition: all 0.1s;
     user-select: none;
     -webkit-user-select: none;
+    touch-action: manipulation;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    box-shadow:
+        0 3px 0 #222,
+        0 4px 4px rgba(0,0,0,0.4),
+        inset 0 1px 0 rgba(255,255,255,0.15);
+    transition: all 0.05s;
+    position: relative;
+    min-width: 44px;
 }
 
 .radio-btn:active {
-    background: var(--accent);
-    transform: scale(0.95);
+    transform: translateY(2px);
+    box-shadow:
+        0 1px 0 #222,
+        0 1px 2px rgba(0,0,0,0.4),
+        inset 0 2px 4px rgba(0,0,0,0.4);
+    background: linear-gradient(180deg, #555 0%, #383838 40%, #2a2a2a 100%);
 }
 
-/* PTT */
+/* Function keys (F1, F2, F3) – darker */
+.radio-btn.func-key {
+    background: linear-gradient(180deg, #555 0%, #3a3a3a 40%, #2a2a2a 100%);
+    color: var(--amber);
+    font-size: 0.75rem;
+}
+
+.radio-btn.func-key:active {
+    background: linear-gradient(180deg, #484848 0%, #303030 40%, #222 100%);
+}
+
+/* Menu/Exit – amber label */
+.radio-btn.nav-key {
+    color: var(--amber);
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+/* Arrow keys – larger */
+.radio-btn.arrow-key {
+    font-size: 1.1rem;
+    padding: 10px 20px;
+}
+
+/* ─── PTT Button (The Big Red Switch) ──────────────────────────── */
+
 #ptt-container {
     display: flex;
     justify-content: center;
     margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(0,0,0,0.2);
 }
 
 .ptt-button {
+    font-family: var(--font-mono);
     width: 100%;
-    max-width: 200px;
-    padding: 20px;
-    font-size: 1.3rem;
+    max-width: 240px;
+    padding: 22px 20px;
+    font-size: 1.2rem;
     font-weight: bold;
-    background: var(--surface);
-    color: var(--accent);
-    border: 2px solid var(--accent);
-    border-radius: 50px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: white;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    
+    /* Red button */
+    background: linear-gradient(180deg, #cc3333 0%, #aa1111 40%, #880808 100%);
+    border: 2px solid #660000;
+    border-radius: 8px;
     cursor: pointer;
-    transition: all 0.15s;
     user-select: none;
     -webkit-user-select: none;
     touch-action: none;
+    
+    box-shadow:
+        0 5px 0 #550000,
+        0 6px 8px rgba(0,0,0,0.5),
+        inset 0 1px 0 rgba(255,255,255,0.2),
+        inset 0 -2px 4px rgba(0,0,0,0.3);
+    transition: all 0.08s;
+    position: relative;
 }
 
 .ptt-button:active,
 .ptt-button.active {
-    background: var(--accent);
-    color: white;
-    transform: scale(0.97);
+    transform: translateY(3px);
+    background: linear-gradient(180deg, #ee4444 0%, #cc2222 40%, #aa1111 100%);
+    box-shadow:
+        0 2px 0 #550000,
+        0 2px 4px rgba(0,0,0,0.5),
+        inset 0 2px 6px rgba(0,0,0,0.4);
+    color: #ffcccc;
+    /* TX active glow */
+    box-shadow:
+        0 2px 0 #550000,
+        0 0 20px rgba(255,68,34,0.5),
+        0 0 40px rgba(255,68,34,0.2),
+        inset 0 2px 6px rgba(0,0,0,0.4);
+}
+
+/* TX indicator */
+.ptt-button::after {
+    content: '●';
+    font-size: 0.6rem;
+    margin-left: 8px;
+    opacity: 0;
+    transition: opacity 0.1s;
+}
+
+.ptt-button.active::after {
+    opacity: 1;
+    color: #ff6600;
+    text-shadow: 0 0 8px #ff6600;
+    animation: blink 0.5s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+/* ─── Engraved Labels ──────────────────────────────────────────── */
+
+.engraved {
+    font-size: 0.55rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #888;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+    text-align: center;
+    margin-top: 4px;
+}
+
+/* ─── Responsive ───────────────────────────────────────────────── */
+
+@media (max-width: 400px) {
+    .control-grid {
+        grid-template-columns: repeat(5, 1fr);
+        gap: 6px;
+    }
+    .radio-btn {
+        padding: 8px 10px;
+        font-size: 0.8rem;
+    }
+    .ptt-button {
+        padding: 18px 16px;
+    }
 }

@@ -57,14 +57,15 @@ async function api(method, path) {
 
 async function checkHealth() {
     const data = await api('GET', '/api/health');
+    const lightEl = document.getElementById('status-light');
     if (data && data.radio === 'connected') {
         state.connected = true;
-        statusEl.textContent = 'Connected';
-        statusEl.className = 'connected';
+        statusEl.textContent = 'ONLINE';
+        lightEl.className = 'status-light on';
     } else {
         state.connected = false;
-        statusEl.textContent = data?.radio || 'Disconnected';
-        statusEl.className = data ? 'error' : '';
+        statusEl.textContent = (data?.radio || 'OFFLINE').toUpperCase();
+        lightEl.className = 'status-light' + (data ? ' error' : '');
     }
 }
 
@@ -77,9 +78,10 @@ async function updateStatus() {
         return;
     }
     
+    const lightEl = document.getElementById('status-light');
     state.connected = data.state === 'connected';
-    statusEl.textContent = data.state;
-    statusEl.className = data.state === 'connected' ? 'connected' : 'error';
+    statusEl.textContent = data.state.toUpperCase();
+    lightEl.className = 'status-light' + (state.connected ? ' on' : (data.state === 'error' ? ' error' : ''));
     
     // Update S-Meter
     if (data.rssi_dbm !== undefined) {
@@ -135,17 +137,24 @@ function setupPTT() {
 // ─── LCD ──────────────────────────────────────────────────────────
 
 function clearLCD() {
-    lcdCtx.fillStyle = '#8bac0f';
+    // Green phosphor CRT look
+    lcdCtx.fillStyle = '#0a0f0a';
     lcdCtx.fillRect(0, 0, lcdCanvas.width, lcdCanvas.height);
     
-    // Placeholder text
-    lcdCtx.fillStyle = '#306230';
+    // Placeholder text in green phosphor
+    lcdCtx.fillStyle = '#00ff41';
     lcdCtx.font = '10px monospace';
     lcdCtx.textAlign = 'center';
-    lcdCtx.fillText('Q-Remote V3', 64, 30);
-    lcdCtx.font = '8px monospace';
-    lcdCtx.fillText('Display via SocketIO', 64, 45);
+    lcdCtx.shadowColor = '#00ff41';
+    lcdCtx.shadowBlur = 4;
+    lcdCtx.fillText('Q-REMOTE V3', 64, 28);
+    lcdCtx.font = '7px monospace';
+    lcdCtx.fillStyle = '#00aa2a';
+    lcdCtx.shadowColor = '#00aa2a';
+    lcdCtx.shadowBlur = 2;
+    lcdCtx.fillText('AWAITING SIGNAL...', 64, 44);
     lcdCtx.textAlign = 'left';
+    lcdCtx.shadowBlur = 0;
 }
 
 // ─── Polling ──────────────────────────────────────────────────────
