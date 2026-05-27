@@ -127,43 +127,60 @@ class Packet:
     params: bytes
 
 
-def build_packet(cmd: Cmd, params: bytes = b'') -> bytes:
+def build_packet(cmd_id: int, params: bytes = b'') -> bytes:
     """Build a complete protocol frame for sending to the radio.
     
-    Frame structure:
-        HEADER (2) + LENGTH (2, LE) + [CMD(2) + PARAM_LEN(2) + PARAMS(N) + CRC(2)]_encrypted + FOOTER (2)
+    Matches V1's build_packet exactly.
     """
-    # Plaintext payload: cmd_id (2) + param_len (2) + params
-    payload = struct.pack('<HH', cmd, len(params)) + params
+    data = bytearray(512)
+    data[0] = 0xAB
+    data[1] = 0xCD
+    data[4] = cmd_id & 0xFF
+    data[5] = (cmd_id >> 8) & 0xFF
+    ind = 8
     
-    # CRC16 over plaintext
-    crc = crc16(payload)
+    for b in params:
+        data[ind] = b
+        ind += 1
     
-    # XOR encrypt payload + CRC
-    encrypted_payload = xor_crypt(payload, start_index=0)
-    encrypted_payload += xor_crypt(bytes([crc & 0xFF, (crc >> 8) & 0xFF]), start_index=len(payload))
+    prm_len = ind - 8
+    data[6] = prm_len & 0xFF
+    data[7] = (prm_len >> 8) & 0xFF
     
-    # Total length = encrypted payload + CRC + footer marker bytes
-    total_len = len(encrypted_payload) + 4  # +4 for CRC(2) + FOOTER(2) ... wait
-    # Actually: LENGTH = bytes_after_header = encrypted_payload + footer
-    # Let me re-check: LENGTH = (ind - 8) where ind points past footer
-    # Simpler: LENGTH = len(encrypted_payload) + 2 (footer)
-    # No wait, the doc says LENGTH = total_bytes_after_header
-    # After header comes LENGTH(2) then the encrypted data then footer
-    # So LENGTH field counts encrypted_payload + footer
-    total_len = len(encrypted_payload) + 2  # +2 for footer bytes
+    # Encrypt payload + compute CRC
+    crc = 0
+    xor_idx = 0
+    for i in range(4, ind):
+        crc = crc16_byte(data[i], crc)
+        data[i] = data[i] ^ XOR_KEY[xor_idx & 0x0F]
+        xor_idx += 1
     
-    frame = HEADER + struct.pack('<H', total_len) + bytes(encrypted_payload) + FOOTER
-    return frame
+    # Append encrypted CRC
+    data[ind] = (crc & 0xFF) ^ XOR_KEY[xor_idx & 0x0F]
+    xor_idx += 1
+    data[ind + 1] = ((crc >> 8) & 0xFF) ^ XOR_KEY[xor_idx & 0x0F]
+    ind += 2
+    
+    # Footer
+    data[ind] = 0xDC
+    data[ind + 1] = 0xBA
+    ind += 2
+    
+    # Size field (V1 formula)
+    data_len = prm_len + 4  # cmd(2) + paramLen(2) + args(prm_len)
+    data[2] = data_len & 0xFF
+    data[3] = (data_len >> 8) & 0xFF
+    
+    return bytes(data[:ind])
 
 
 def build_key_press(keycode: int) -> bytes:
-    """Build a KeyPress packet.
+    """Build a KeyPress packet with magic timestamp.
     
-    Args:
-        keycode: Key code (0-19), see Key enum
+    V1 sends: u16(keycode) + uint32(0x12345678)
     """
-    return build_packet(Cmd.KEY_PRESS, struct.pack('<H', keycode))
+    params = struct.pack('<H', keycode) + struct.pack('<I', 0x12345678)
+    return build_packet(Cmd.KEY_PRESS, params)
 
 
 def build_hello(timestamp: int = 0x12345678) -> bytes:
@@ -173,12 +190,12 @@ def build_hello(timestamp: int = 0x12345678) -> bytes:
 
 def build_get_rssi() -> bytes:
     """Build an RSSI request packet."""
-    return build_packet(Cmd.GET_RSSI)
+    return build_packet(Cmd.GET_RSSI, struct.pack('<I', 0x12345678))
 
 
 def build_get_screen() -> bytes:
     """Build a screen dump request packet."""
-    return build_packet(Cmd.GET_SCREEN)
+    return build_packet(Cmd.GET_SCREEN, struct.pack('<I', 0x12345678))
 
 
 # ─── Packet Parsing ───────────────────────────────────────────────────
