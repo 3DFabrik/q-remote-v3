@@ -32,14 +32,15 @@ class LCDDisplay:
         delta = now - self._last_push
         if delta < 0.1:
             return
-        log.info(f"LCD flush: delta={delta:.3f}s, callbacks={len(self._change_callbacks)}")
         self._last_push = now
         state = self.get_state()
-        # Always push for now (debug)
         self._last_state = state
+        log.info(f"LCD flush: callbacks={len(self._change_callbacks)}, calling...")
         for cb in self._change_callbacks:
+            log.info(f"LCD flush: calling callback {cb}")
             try:
                 cb(state)
+                log.info("LCD flush: callback returned OK")
             except Exception as e:
                 log.error(f"LCD callback error: {e}")
 
