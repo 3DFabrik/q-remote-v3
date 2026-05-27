@@ -319,6 +319,26 @@ logging:
 
 ---
 
+## Deployment & Umgebung
+
+| Was | Wert |
+|-----|------|
+| Host | HamPi (192.168.1.117) |
+| User | `elsen` |
+| Passwort | siehe `/root/.openclaw/.secrets` oder TOOLS.md |
+| Repo auf Pi | `/home/elsen/q-remote-v3/` |
+| GitHub | <https://github.com/3DFabrik/q-remote-v3> (öffentlich) |
+| Service | Systemd, User `elsen` |
+| Reverse Proxy | Caddy (automatic HTTPS) |
+| Domain | ham.elsens.de (wie V1) |
+
+## Gegebenheiten ⚠️
+
+- **HTTPS ist Pflicht** – Browser verlangen sicheren Kontext für `getUserMedia()` (Mikrofon). Caddy übernimmt das automatisch.
+- **Dokumentation** – Jede Komponente wird dokumentiert (Docstrings + README + API-Docs). Code soll für andere verständlich sein.
+- **Öffentliches Repo** – Keine Secrets im Code! Config-Templates mit Platzhaltern, echte Werte nur auf dem Pi.
+- **Ein User auf dem Pi** – `elsen`. Falls Rechte nicht reichen → `sudo` wo nötig, keinen neuen User anlegen.
+
 ## Entscheidungen ✅
 
 1. **ALSA → subprocess** – `arecord`/`aplay` als subprocess. Simpler, weniger Abhängigkeiten, leichter zu debuggen. Kein `pyalsaaudio` Compiling auf dem Pi.
