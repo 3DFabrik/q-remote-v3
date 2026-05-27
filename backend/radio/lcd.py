@@ -33,8 +33,7 @@ class LCDDisplay:
             return
         self._last_push = now
         state = self.get_state()
-        if self._last_state is not None and state == self._last_state:
-            return
+        # Always push for now (debug)
         self._last_state = state
         for cb in self._change_callbacks:
             try:
