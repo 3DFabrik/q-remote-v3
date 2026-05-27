@@ -33,13 +33,13 @@ def init_radio():
 
     # LCD change callback -> broadcast lcd_update to clients
     def on_lcd_change(state):
-        log.info(f"LCD change callback fired! state={state.get('state', '?')}")
+        logger.info(f"LCD change callback fired!")
         if radio._loop:
             radio._loop.call_soon_threadsafe(
                 lambda: asyncio.ensure_future(_emit_lcd(state))
             )
         else:
-            log.warning("LCD change: no event loop!")
+            logger.warning("LCD change: no event loop!")
 
     lcd.on_change(on_lcd_change)
 

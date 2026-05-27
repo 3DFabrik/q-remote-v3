@@ -29,23 +29,20 @@ class LCDDisplay:
 
     def flush(self):
         now = time.time()
-        delta = now - self._last_push
-        if delta < 0.1:
+        if now - self._last_push < 0.1:
             return
         self._last_push = now
         state = self.get_state()
+        if self._last_state is not None and state == self._last_state:
+            return
         self._last_state = state
-        log.info(f"LCD flush: callbacks={len(self._change_callbacks)}, calling...")
         for cb in self._change_callbacks:
-            log.info(f"LCD flush: calling callback {cb}")
             try:
                 cb(state)
-                log.info("LCD flush: callback returned OK")
             except Exception as e:
                 log.error(f"LCD callback error: {e}")
 
     def process_ui_packet(self, ui_type, val1, val2, val3, data_len, data):
-        log.info(f"LCD process: type={ui_type} v1={val1} v2={val2} v3={val3} dlen={data_len}")
         if ui_type == 0:
             text = data.decode('ascii', errors='replace') if data else ""
             y = val2 + 1
