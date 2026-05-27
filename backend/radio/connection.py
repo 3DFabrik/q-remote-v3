@@ -50,6 +50,7 @@ class RadioConnection:
             )
             self.connected = True
             self._loop = asyncio.get_event_loop()
+            log.info(f"Event loop: {self._loop}")
             log.info(f"Connected to radio on {self.port_name}")
 
             # V1 init sequence exactly
@@ -153,13 +154,17 @@ class RadioConnection:
 
     def _on_ui_callback(self, ui_type, val1, val2, val3, data_len, data):
         # This is called from the reader THREAD (not async)
-        # Schedule the async handler on the event loop
-        if self._loop:
-            self._loop.call_soon_threadsafe(
-                lambda: asyncio.ensure_future(
-                    self._async_ui(ui_type, val1, val2, val3, data_len, data)
-                )
+        if not self._loop:
+            log.warning(f"No event loop! UI type={ui_type} dropped")
+            return
+        if not self.on_ui:
+            log.warning(f"No on_ui callback! UI type={ui_type} dropped")
+            return
+        self._loop.call_soon_threadsafe(
+            lambda: asyncio.ensure_future(
+                self._async_ui(ui_type, val1, val2, val3, data_len, data)
             )
+        )
 
     async def _async_ui(self, ui_type, val1, val2, val3, data_len, data):
         log.info(f"Async UI called: type={ui_type} v1={val1}")
