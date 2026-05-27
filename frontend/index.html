@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Q-Remote V3</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>🤖 Q-Remote V3</h1>
+            <div id="status">Connecting...</div>
+        </header>
+        
+        <main>
+            <!-- LCD Display -->
+            <section id="display-section">
+                <canvas id="lcd" width="128" height="64"></canvas>
+            </section>
+            
+            <!-- S-Meter -->
+            <section id="smeter-section">
+                <div id="smeter">
+                    <div id="smeter-bar"></div>
+                    <span id="smeter-value">--</span>
+                </div>
+            </section>
+            
+            <!-- Controls -->
+            <section id="controls">
+                <div class="button-row">
+                    <button class="radio-btn" data-key="10">F1</button>
+                    <button class="radio-btn" data-key="11">F2</button>
+                    <button class="radio-btn" data-key="12">F3</button>
+                </div>
+                <div class="button-row">
+                    <button class="radio-btn" data-key="13">Menu</button>
+                    <button class="radio-btn" data-key="19">Exit</button>
+                </div>
+                <div class="button-row">
+                    <button class="radio-btn" data-key="14">▲</button>
+                    <button class="radio-btn" data-key="15">▼</button>
+                </div>
+                <div class="button-grid">
+                    <button class="radio-btn" data-key="1">1</button>
+                    <button class="radio-btn" data-key="2">2</button>
+                    <button class="radio-btn" data-key="3">3</button>
+                    <button class="radio-btn" data-key="4">4</button>
+                    <button class="radio-btn" data-key="5">5</button>
+                    <button class="radio-btn" data-key="6">6</button>
+                    <button class="radio-btn" data-key="7">7</button>
+                    <button class="radio-btn" data-key="8">8</button>
+                    <button class="radio-btn" data-key="9">9</button>
+                    <button class="radio-btn" data-key="0">0</button>
+                </div>
+                
+                <!-- PTT -->
+                <div id="ptt-container">
+                    <button id="ptt-btn" class="ptt-button">PTT</button>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

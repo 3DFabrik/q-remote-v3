@@ -203,6 +203,11 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# Q-Remote V3 specifics
+config.local.yaml
+users.yaml
+*.pid
+
 # Ruff stuff:
 .ruff_cache/
 
