@@ -91,9 +91,18 @@ class QuanshengAdapter(RadioAdapter):
             
             logger.info(f"Serial port opened: {self._device} @ {self._baudrate} baud")
             
-            # Init sequence
+            # Init sequence (from QuanshengDock):
+            # 1. Send \x00 to wake serial
+            # 2. Hello (0x0514) with magic timestamp -> enables gSetting_Remote_UI
+            #    Firmware starts sending UI elements (type 0-3, 7-8)
+            # 3. KeyPress Menu + Exit to activate display
             self._serial.write(b'\x00')
             await asyncio.sleep(0.1)
+            self._serial.reset_input_buffer()  # Clear any junk
+            
+            self._serial.write(build_hello())  # This enables remote UI mode!
+            await asyncio.sleep(0.2)
+            
             self._serial.write(build_key_press(Key.MENU))
             await asyncio.sleep(0.1)
             self._serial.write(build_key_press(Key.EXIT))
