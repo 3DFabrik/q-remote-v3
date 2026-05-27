@@ -44,7 +44,11 @@ class ControlModule {
         });
         
         this.socket.on('display', (data) => {
-            if (this.onDisplayUpdate) this.onDisplayUpdate(data.data);
+            if (this.onDisplayUpdate) this.onDisplayUpdate(data);
+        });
+        
+        this.socket.on('lcd_update', (data) => {
+            if (this.onDisplayUpdate) this.onDisplayUpdate(data);
         });
         
         this.socket.on('rssi', (data) => {

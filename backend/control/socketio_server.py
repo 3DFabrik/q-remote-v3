@@ -1,5 +1,5 @@
 """SocketIO server for real-time control communication.
-Adapted to work with V1's RadioConnection.
+Uses V1's LCDDisplay to process type 5/6 packets into display fragments.
 """
 
 import asyncio
@@ -10,6 +10,7 @@ import socketio
 
 from backend.radio.connection import RadioConnection
 from backend.radio.protocol import Packet
+from backend.radio.lcd import LCDDisplay
 
 logger = logging.getLogger(__name__)
 
@@ -21,16 +22,27 @@ sio = socketio.AsyncServer(
 )
 
 radio: Optional[RadioConnection] = None
+lcd: Optional[LCDDisplay] = None
 _ptt_owner: Optional[str] = None
 
 
 def init_radio():
-    """Create and configure the radio connection."""
-    global radio
+    global radio, lcd
     radio = RadioConnection()
+    lcd = LCDDisplay()
 
-    # Wire up callbacks
-    radio.on_ui = _on_ui
+    # LCD change callback -> broadcast lcd_update to clients
+    def on_lcd_change(state):
+        asyncio.ensure_future(_emit_lcd(state))
+
+    lcd.on_change(on_lcd_change)
+
+    # Wire radio UI callback to LCD
+    async def handle_ui(ui_type, val1, val2, val3, data_len, data):
+        lcd.process_ui_packet(ui_type, val1, val2, val3, data_len, data)
+        lcd.flush()
+
+    radio.on_ui = handle_ui
     radio.on_rssi = _on_rssi
     radio.on_connect = _on_radio_connect
     radio.on_disconnect = _on_radio_disconnect
@@ -42,26 +54,16 @@ def get_sio_app():
     return socketio.ASGIApp(sio, socketio_path='socket.io')
 
 
-# ─── Radio Callbacks ─────────────────────────────────────────────
+# ─── Emit helpers ─────────────────────────────────────────────────
 
-async def _on_ui(ui_type, val1, val2, val3, data_len, data):
-    """Radio sent UI data → broadcast to all clients."""
-    await sio.emit('display', {
-        'type': ui_type,
-        'val1': val1,
-        'val2': val2,
-        'val3': val3,
-        'dataLen': data_len,
-        'data': list(data) if data else [],
-    })
+async def _emit_lcd(state):
+    await sio.emit('lcd_update', state)
 
 
 async def _on_rssi(raw_data):
-    """Radio sent RSSI → parse and broadcast."""
     if len(raw_data) >= 4:
         rssi_raw = raw_data[2] | (raw_data[3] << 8)
         dbm = -(rssi_raw & 0x3FF) / 2.0
-
         s_points = [
             (-121, "S1"), (-115, "S2"), (-109, "S3"), (-103, "S4"),
             (-97, "S5"), (-91, "S6"), (-85, "S7"), (-79, "S8"), (-73, "S9"),
@@ -71,7 +73,6 @@ async def _on_rssi(raw_data):
             if dbm <= threshold:
                 s_unit = label
                 break
-
         await sio.emit('rssi', {'dbm': round(dbm, 1), 's_unit': s_unit})
 
 
@@ -92,6 +93,9 @@ async def connect(sid, environ):
     logger.info(f"Client connected: {sid}")
     if radio and radio.connected:
         await sio.emit('radio_state', {'state': 'connected'}, to=sid)
+        # Send current LCD state immediately
+        if lcd:
+            await sio.emit('lcd_update', lcd.get_state(), to=sid)
     else:
         await sio.emit('radio_state', {'state': 'disconnected'}, to=sid)
 
@@ -102,7 +106,7 @@ async def disconnect(sid):
     logger.info(f"Client disconnected: {sid}")
     if _ptt_owner == sid:
         if radio:
-            radio.send_key(13)  # Release PTT (EXIT key)
+            radio.send_key(13)
         _ptt_owner = None
         await sio.emit('ptt_status', {'active': False, 'holder': None})
 
@@ -123,7 +127,7 @@ async def ptt_on(sid, data=None):
         await sio.emit('ptt_status', {'active': False, 'error': 'PTT locked'}, to=sid)
         return
     _ptt_owner = sid
-    radio.send_key(16)  # V1 PTT key code
+    radio.send_key(16)
     await sio.emit('ptt_status', {'active': True, 'holder': sid})
 
 
@@ -133,7 +137,7 @@ async def ptt_off(sid, data=None):
     if _ptt_owner != sid:
         return
     if radio:
-        radio.send_key(13)  # V1 EXIT key = PTT release
+        radio.send_key(13)
     _ptt_owner = None
     await sio.emit('ptt_status', {'active': False, 'holder': None})
 
@@ -142,9 +146,3 @@ async def ptt_off(sid, data=None):
 async def request_rssi(sid, data=None):
     if radio and radio.connected:
         radio.request_rssi()
-
-
-@sio.event
-async def request_display(sid, data=None):
-    if radio and radio.connected:
-        radio.request_screen()
