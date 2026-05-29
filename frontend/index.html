@@ -15,6 +15,10 @@
                 <div id="status-light" class="status-light"></div>
                 <span id="status">INIT</span>
             </div>
+            <button id="audio-btn" class="audio-toggle" title="Toggle RX Audio">
+                <span class="audio-icon">🔇</span>
+                <span class="audio-label">AUDIO</span>
+            </button>
         </header>
 
         <!-- CRT Display Panel -->
@@ -25,14 +29,18 @@
             </div>
         </div>
 
-        <!-- S-Meter Panel -->
+        <!-- S-Meter + PTT Panel -->
         <div class="instrument-panel">
             <div class="panel-label">Signal Strength — S-Meter</div>
-            <div id="smeter">
-                <div id="smeter-bar-track">
-                    <div id="smeter-bar"></div>
+            <div id="smeter-ptt-row">
+                <div id="smeter">
+                    <canvas id="smeter-canvas" width="260" height="80"></canvas>
+                    <span id="smeter-value">S0 — dBm</span>
                 </div>
-                <span id="smeter-value">S0 —</span>
+                <div id="ptt-column">
+                    <button id="ptt-btn" class="ptt-button">TRANSMIT</button>
+                    <div class="engraved">Push to Talk</div>
+                </div>
             </div>
         </div>
 
@@ -40,48 +48,33 @@
         <div class="instrument-panel">
             <div class="panel-label">Transmitter Control</div>
             <section id="controls">
-                <!-- Function Keys -->
-                <div class="control-row">
-                    <button class="radio-btn func-key" data-key="10">F1</button>
-                    <button class="radio-btn func-key" data-key="11">F2</button>
-                    <button class="radio-btn func-key" data-key="12">F3</button>
-                </div>
-
-                <!-- Navigation -->
-                <div class="control-row">
-                    <button class="radio-btn nav-key" data-key="13">MENU</button>
-                    <button class="radio-btn nav-key" data-key="19">EXIT</button>
-                </div>
-
-                <!-- Arrows -->
-                <div class="control-row">
-                    <button class="radio-btn arrow-key" data-key="14">▲</button>
-                    <button class="radio-btn arrow-key" data-key="15">▼</button>
-                </div>
-
-                <!-- Numeric Keypad -->
+                <!-- Button Grid (4×4 like real UV-K5) -->
                 <div class="control-grid">
-                    <button class="radio-btn" data-key="1">1</button>
-                    <button class="radio-btn" data-key="2">2</button>
-                    <button class="radio-btn" data-key="3">3</button>
-                    <button class="radio-btn" data-key="4">4</button>
-                    <button class="radio-btn" data-key="5">5</button>
-                    <button class="radio-btn" data-key="6">6</button>
-                    <button class="radio-btn" data-key="7">7</button>
-                    <button class="radio-btn" data-key="8">8</button>
-                    <button class="radio-btn" data-key="9">9</button>
-                    <button class="radio-btn" data-key="0">0</button>
+                    <button class="radio-btn nav-key" data-key="10"><span class="btn-label">M</span><span class="btn-sub">🅐</span></button>
+                    <button class="radio-btn arrow-key" data-key="11"><span class="btn-label">▲</span><span class="btn-sub">🅑</span></button>
+                    <button class="radio-btn arrow-key" data-key="12"><span class="btn-label">▼</span><span class="btn-sub">🅒</span></button>
+                    <button class="radio-btn nav-key btn-exit" data-key="13"><span class="btn-label">EXIT</span><span class="btn-sub">🅓</span></button>
+
+                    <button class="radio-btn" data-key="1"><span class="btn-label">1</span><span class="btn-sub">BAND</span></button>
+                    <button class="radio-btn" data-key="2"><span class="btn-label">2</span><span class="btn-sub">A/B</span></button>
+                    <button class="radio-btn" data-key="3"><span class="btn-label">3</span><span class="btn-sub">VFO</span></button>
+                    <button class="radio-btn" data-key="14"><span class="btn-label">✱</span><span class="btn-sub">SCAN</span></button>
+
+                    <button class="radio-btn" data-key="4"><span class="btn-label">4</span><span class="btn-sub">FC</span></button>
+                    <button class="radio-btn" data-key="5"><span class="btn-label">5</span><span class="btn-sub">SQL</span></button>
+                    <button class="radio-btn" data-key="6"><span class="btn-label">6</span><span class="btn-sub">PWR</span></button>
+                    <button class="radio-btn" data-key="0"><span class="btn-label">0</span><span class="btn-sub">FM</span></button>
+
+                    <button class="radio-btn" data-key="7"><span class="btn-label">7</span><span class="btn-sub">W/N</span></button>
+                    <button class="radio-btn" data-key="8"><span class="btn-label">8</span><span class="btn-sub">TDR</span></button>
+                    <button class="radio-btn" data-key="9"><span class="btn-label">9</span><span class="btn-sub">CALL</span></button>
+                    <button class="radio-btn btn-f" data-key="15"><span class="btn-label">F</span><span class="btn-sub">COMP</span></button>
                 </div>
 
-                <!-- PTT -->
-                <div id="ptt-container">
-                    <button id="ptt-btn" class="ptt-button">TRANSMIT</button>
-                </div>
-                <div class="engraved">Push to Talk — Release to Listen</div>
             </section>
         </div>
     </div>
 
-    <script type="module" src="/static/js/app.js"></script>
+    <script type="module" src="/static/js/app.js?v=3.4"></script>
 </body>
 </html>

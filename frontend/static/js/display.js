@@ -3,8 +3,9 @@
  * Renders V1's lcd_update events (fragment-based text positioning).
  */
 
-const DISPLAY_W = 128;
-const DISPLAY_H = 64;
+const SCALE = 3;
+const DISPLAY_W = 128 * SCALE;
+const DISPLAY_H = 64 * SCALE;
 
 export class DisplayRenderer {
     constructor(canvas) {
@@ -27,31 +28,26 @@ export class DisplayRenderer {
      * Format: {fragments: {0: [...], 1: [...], ...}, smeter, state, battery_v, ...}
      */
     processEvent(state) {
-        this.clear();
+        // Don't clear – paint over previous frame to avoid flicker
+        this.ctx.fillStyle = this.bgColor;
+        this.ctx.fillRect(0, 0, DISPLAY_W, DISPLAY_H);
 
-        const {fragments, state: radioState, battery_v, battery_pct} = state;
+        const {fragments} = state;
 
         for (let lineIdx = 0; lineIdx < 8; lineIdx++) {
             const lineFrags = fragments[String(lineIdx)];
             if (!lineFrags || lineFrags.length === 0) continue;
 
-            const py = lineIdx * 8;
+            const py = lineIdx * 8 * SCALE;
 
             for (const frag of lineFrags) {
-                const px = frag.x;
-                const fontSize = Math.max(5, Math.round(frag.size * 6));
+                const px = frag.x * SCALE;
+                const fontSize = Math.max(5, Math.round(frag.size * 6 * SCALE));
                 const text = frag.text;
                 if (!text) continue;
 
-                if (frag.inverted) {
-                    // Draw inverted (background on, text off)
-                    const textWidth = text.length * fontSize * 0.6;
-                    this.ctx.fillStyle = this.fgColor;
-                    this.ctx.fillRect(px, py, textWidth, fontSize);
-                    this.ctx.fillStyle = this.bgColor;
-                } else {
-                    this.ctx.fillStyle = this.fgColor;
-                }
+                // All text positive (green on dark) for readability
+                this.ctx.fillStyle = this.fgColor;
 
                 this.ctx.font = `${frag.bold ? 'bold ' : ''}${fontSize}px monospace`;
                 this.ctx.textBaseline = 'top';

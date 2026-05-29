@@ -37,6 +37,7 @@ class RadioConnection:
         # Callbacks (set by socketio_server.py)
         self.on_ui = None         # async (ui_type, v1, v2, v3, dlen, data)
         self.on_rssi = None       # async (data)
+        self.on_register = None   # async (reg, val)
         self.on_command = None    # async (data)
         self.on_connect = None    # async ()
         self.on_disconnect = None # async ()
@@ -61,21 +62,21 @@ class RadioConnection:
             except Exception as e:
                 log.warning(f"Init \\x00 failed (non-critical): {e}")
 
-            log.info("Sending Hello with magic timestamp to activate Remote UI...")
-            self.send_hello()
-            time.sleep(0.3)
-
-            # Start reader AFTER init (same as V1)
+            # Start reader BEFORE Hello so we don't miss initial display data
             self._running = True
             self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
             self._reader_thread.start()
-            time.sleep(0.2)
-
-            # V1 key codes: 10=MENU, 13=EXIT (NOT 13/19 from protocol doc!)
-            self.send_key(10)  # MENU - triggers display redraw
             time.sleep(0.05)
-            self.send_key(13)  # EXIT - go back to main screen
+
+            log.info("Sending Hello with magic timestamp to activate Remote UI...")
+            self.send_hello()
+            time.sleep(0.5)
+
+            # V1 key codes: 10=MENU, 13=EXIT
+            self.send_key(10)  # MENU - triggers display redraw
             time.sleep(0.1)
+            self.send_key(13)  # EXIT - go back to main screen
+            time.sleep(0.2)
 
             log.info("Radio init complete - Remote UI active")
             self._safe_emit('on_connect')
@@ -114,7 +115,11 @@ class RadioConnection:
         self.send_command(Packet.KEY_PRESS, u16(key_code), 0x12345678)
 
     def request_rssi(self):
+        # Try both methods: GET_RSSI and register 0x67
         self.send_command(Packet.GET_RSSI, 0x12345678)
+
+    def read_register(self, reg):
+        self.send_command(Packet.READ_REGISTERS, u16(1), u16(reg))
 
     def request_screen(self):
         self.send_command(Packet.GET_SCREEN, 0x12345678)
@@ -125,6 +130,7 @@ class RadioConnection:
                 if self.port and self.port.is_open:
                     raw = self.port.read(256)
                     if raw:
+                        log.info(f"Serial read {len(raw)} bytes: {raw[:40].hex()}")
                         self.parser.feed(
                             raw,
                             on_command=self._on_command,
@@ -145,7 +151,17 @@ class RadioConnection:
             return
         cmd = data[0] | (data[1] << 8)
         if cmd == Packet.RSSI_INFO:
+            log.debug(f"RSSI cmd received (deprecated): {data.hex()}")
             self._safe_emit('on_rssi', data)
+        elif cmd == Packet.REGISTER_INFO:
+            # RegisterInfo: [cmd:2] [paramLen:2] [reg:2] [val:2]
+            log.info(f"RegisterInfo cmd=0x{cmd:04X} raw: {data.hex()}")
+            if len(data) >= 8:
+                param_len = data[2] | (data[3] << 8)
+                reg = data[4] | (data[5] << 8)
+                val = data[6] | (data[7] << 8)
+                log.info(f"Register parsed: reg=0x{reg:04X} val=0x{val:04X} (paramLen={param_len})")
+                self._safe_emit('on_register', reg, val)
         elif cmd == Packet.IM_HERE:
             log.debug("Radio acknowledged heartbeat")
         else:

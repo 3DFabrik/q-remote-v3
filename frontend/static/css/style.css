@@ -168,7 +168,7 @@ header h1 {
     position: relative;
     background: var(--crt-bg);
     border-radius: 16px;
-    padding: 12px;
+    padding: 6px;
     border: 3px solid #333;
     box-shadow: 
         inset 0 0 30px rgba(0,255,65,0.05),
@@ -176,45 +176,14 @@ header h1 {
     overflow: hidden;
 }
 
-/* CRT scanlines overlay */
-#display-section::after {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 2px,
-        rgba(0,0,0,0.15) 2px,
-        rgba(0,0,0,0.15) 4px
-    );
-    pointer-events: none;
-    border-radius: 16px;
-}
-
-/* CRT curvature / glow */
-#display-section::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: radial-gradient(
-        ellipse at center,
-        transparent 60%,
-        rgba(0,0,0,0.4) 100%
-    );
-    pointer-events: none;
-    border-radius: 16px;
-    z-index: 1;
-}
+/* CRT effects disabled for readability - Tektronix sharpness! */
 
 #lcd {
     width: 100%;
-    max-width: 280px;
+    max-width: 384px;
     display: block;
     margin: 0 auto;
-    image-rendering: pixelated;
     border-radius: 4px;
-    filter: brightness(1.1);
 }
 
 /* ─── S-Meter ──────────────────────────────────────────────────── */
@@ -223,43 +192,44 @@ header h1 {
     margin-bottom: 12px;
 }
 
+#smeter-ptt-row {
+    display: flex;
+    gap: 12px;
+    align-items: stretch;
+}
+
 #smeter {
+    flex: 1;
     background: var(--panel-inner);
     border-radius: 8px;
-    padding: 12px 20px;
+    padding: 6px 4px;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 16px;
+    gap: 2px;
     border: 2px solid var(--panel-border);
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
 }
 
-#smeter-bar-track {
-    flex: 1;
-    height: 20px;
-    background: #1a1a1a;
-    border-radius: 3px;
-    overflow: hidden;
-    border: 1px solid #333;
-    position: relative;
-}
-
-#smeter-bar {
-    height: 100%;
-    width: 0%;
-    background: linear-gradient(90deg, var(--phosphor) 0%, var(--amber) 70%, var(--red) 100%);
-    border-radius: 2px;
-    transition: width 0.15s ease-out;
-    box-shadow: 0 0 8px rgba(0,255,65,0.3);
+#smeter-canvas {
+    width: 100%;
+    display: block;
 }
 
 #smeter-value {
     font-family: var(--font-mono);
-    font-size: 0.8rem;
+    font-size: 0.7rem;
     color: var(--phosphor);
-    min-width: 80px;
-    text-align: right;
+    text-align: center;
     text-shadow: 0 0 6px rgba(0,255,65,0.5);
+}
+
+#ptt-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 120px;
 }
 
 /* ─── Controls Panel ───────────────────────────────────────────── */
@@ -270,14 +240,19 @@ header h1 {
 
 .control-row {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     margin-bottom: 10px;
     justify-content: center;
 }
 
+/* Top row buttons (M ▲ ▼ EXIT) equally spaced */
+.control-row .radio-btn {
+    flex: 1;
+}
+
 .control-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 8px;
     margin-bottom: 12px;
     padding: 0 4px;
@@ -292,7 +267,7 @@ header h1 {
     background: linear-gradient(180deg, #666 0%, #444 40%, #333 100%);
     border: 1px solid #222;
     border-radius: 4px;
-    padding: 10px 14px;
+    padding: 6px 8px;
     cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
@@ -305,6 +280,22 @@ header h1 {
     transition: all 0.05s;
     position: relative;
     min-width: 44px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.radio-btn .btn-label {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.radio-btn .btn-sub {
+    font-size: 0.5rem;
+    color: var(--amber);
+    opacity: 0.7;
+    letter-spacing: 0.5px;
 }
 
 .radio-btn:active {
@@ -316,16 +307,7 @@ header h1 {
     background: linear-gradient(180deg, #555 0%, #383838 40%, #2a2a2a 100%);
 }
 
-/* Function keys (F1, F2, F3) – darker */
-.radio-btn.func-key {
-    background: linear-gradient(180deg, #555 0%, #3a3a3a 40%, #2a2a2a 100%);
-    color: var(--amber);
-    font-size: 0.75rem;
-}
-
-.radio-btn.func-key:active {
-    background: linear-gradient(180deg, #484848 0%, #303030 40%, #222 100%);
-}
+/* Function keys removed – using UV-K5 layout */
 
 /* Menu/Exit – amber label */
 .radio-btn.nav-key {
@@ -334,30 +316,34 @@ header h1 {
     letter-spacing: 1px;
 }
 
+.radio-btn.btn-exit {
+    color: #ff6644;
+}
+
 /* Arrow keys – larger */
 .radio-btn.arrow-key {
     font-size: 1.1rem;
-    padding: 10px 20px;
+    padding: 8px 16px;
+}
+
+/* F button – blue accent */
+.radio-btn.btn-f {
+    color: #66aaff;
 }
 
 /* ─── PTT Button (The Big Red Switch) ──────────────────────────── */
 
-#ptt-container {
-    display: flex;
-    justify-content: center;
-    margin-top: 16px;
-    padding-top: 12px;
-    border-top: 1px solid rgba(0,0,0,0.2);
-}
+/* PTT now in #ptt-column */
 
 .ptt-button {
     font-family: var(--font-mono);
     width: 100%;
-    max-width: 240px;
-    padding: 22px 20px;
-    font-size: 1.2rem;
+    height: 100%;
+    min-height: 80px;
+    padding: 12px 10px;
+    font-size: 0.85rem;
     font-weight: bold;
-    letter-spacing: 4px;
+    letter-spacing: 2px;
     text-transform: uppercase;
     color: white;
     text-shadow: 0 1px 3px rgba(0,0,0,0.8);
@@ -444,4 +430,39 @@ header h1 {
     .ptt-button {
         padding: 18px 16px;
     }
+}
+
+/* ─── Audio Toggle Button ──────────────────────────────────── */
+.audio-toggle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--panel-dark);
+    border: 2px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    color: var(--white);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    transition: all 0.15s;
+    min-width: 56px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.3);
+}
+.audio-toggle:active {
+    transform: scale(0.95);
+}
+.audio-toggle .audio-icon {
+    font-size: 20px;
+    line-height: 1;
+}
+.audio-toggle .audio-label {
+    margin-top: 2px;
+    letter-spacing: 1px;
+}
+.audio-toggle.active {
+    background: #2a5030;
+    border-color: var(--green);
+    box-shadow: 0 0 8px rgba(0,204,68,0.3);
 }

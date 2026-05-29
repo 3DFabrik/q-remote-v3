@@ -46,10 +46,25 @@ def init_radio():
     # Wire radio UI callback to LCD
     async def handle_ui(ui_type, val1, val2, val3, data_len, data):
         lcd.process_ui_packet(ui_type, val1, val2, val3, data_len, data)
-        lcd.flush()
+        # Only flush after type 6 (status) – end of display frame
+        if ui_type == 6:
+            lcd.flush()
+            # Emit RSSI from display text (parsed from radio LCD)
+            if lcd.rssi != -120:
+                s_points = [
+                    (-140, "S0"), (-121, "S1"), (-115, "S2"), (-109, "S3"), (-103, "S4"),
+                    (-97, "S5"), (-91, "S6"), (-85, "S7"), (-79, "S8"), (-73, "S9"),
+                ]
+                s_unit = "S9+"
+                for threshold, label in s_points:
+                    if lcd.rssi <= threshold:
+                        s_unit = label
+                        break
+                await sio.emit('rssi', {'dbm': lcd.rssi, 's_unit': s_unit})
 
     radio.on_ui = handle_ui
     radio.on_rssi = _on_rssi
+    radio.on_register = _on_register
     radio.on_connect = _on_radio_connect
     radio.on_disconnect = _on_radio_disconnect
 
@@ -67,11 +82,19 @@ async def _emit_lcd(state):
 
 
 async def _on_rssi(raw_data):
-    if len(raw_data) >= 4:
-        rssi_raw = raw_data[2] | (raw_data[3] << 8)
-        dbm = -(rssi_raw & 0x3FF) / 2.0
+    """RSSI from GET_RSSI – always returns garbage (-156), ignore."""
+    pass
+
+
+async def _on_register(reg, val):
+    """Register value from radio – BK4819 RSSI via register 0x67."""
+    if reg == 0x67:
+        # BK4819 RSSI register: 9-bit value, 0.5 dB steps
+        rssi_raw = val & 0x1FF
+        dbm = round((rssi_raw * 0.5) - 160)
+        logger.info(f"RSSI reg=0x67 raw={rssi_raw} val=0x{val:04X} dbm={dbm}")
         s_points = [
-            (-121, "S1"), (-115, "S2"), (-109, "S3"), (-103, "S4"),
+            (-140, "S0"), (-121, "S1"), (-115, "S2"), (-109, "S3"), (-103, "S4"),
             (-97, "S5"), (-91, "S6"), (-85, "S7"), (-79, "S8"), (-73, "S9"),
         ]
         s_unit = "S9+"
@@ -79,7 +102,7 @@ async def _on_rssi(raw_data):
             if dbm <= threshold:
                 s_unit = label
                 break
-        await sio.emit('rssi', {'dbm': round(dbm, 1), 's_unit': s_unit})
+        await sio.emit('rssi', {'dbm': dbm, 's_unit': s_unit})
 
 
 async def _on_radio_connect():
@@ -151,4 +174,5 @@ async def ptt_off(sid, data=None):
 @sio.event
 async def request_rssi(sid, data=None):
     if radio and radio.connected:
+        logger.info("RSSI requested")
         radio.request_rssi()

@@ -15,6 +15,7 @@ class LCDDisplay:
         self.fragments = {i: [] for i in range(LCD_LINES)}
         self.smeter = 0
         self.rssi = -120
+        self._rssi_history = []
         self.state = 'idle'
         self.battery_v = 0.0
         self.battery_pct = 0
@@ -43,6 +44,8 @@ class LCDDisplay:
                 log.error(f"LCD callback error: {e}")
 
     def process_ui_packet(self, ui_type, val1, val2, val3, data_len, data):
+        if ui_type in (0, 1, 2, 3) and data:
+            log.info(f"UI text type={ui_type} x={val1} y={val2} sz={val3} text='{data.decode('ascii', errors='replace')}'")
         if ui_type == 0:
             text = data.decode('ascii', errors='replace') if data else ""
             y = val2 + 1
@@ -55,6 +58,9 @@ class LCDDisplay:
             x = val1
             while x > 128: y += 1; x -= 128
             self._add_fragment(x, y, val3 / 6.0, text, False, False)
+            # Parse RSSI from display text like "-112 S3"
+            if 'S' in text and y >= 3:
+                self._parse_rssi_text(text)
         elif ui_type == 2:
             text = data.decode('ascii', errors='replace') if data else ""
             y = val2 + 1
@@ -80,7 +86,24 @@ class LCDDisplay:
             if val2 != 0:
                 self.active_vfo_line = y
         elif ui_type == 8:
+            log.info(f"S-Meter type 8: val1={val1} val2={val2} val3={val3}")
             self.smeter = val1
+
+    def _parse_rssi_text(self, text):
+        """Extract dBm and S-unit from radio display text like '-112 S3'."""
+        try:
+            parts = text.strip().split()
+            if len(parts) >= 2:
+                dbm = int(parts[0])
+                s_unit = parts[1]
+                # Smooth: running average of last 4 readings
+                self._rssi_history.append(dbm)
+                if len(self._rssi_history) > 4:
+                    self._rssi_history.pop(0)
+                self.rssi = round(sum(self._rssi_history) / len(self._rssi_history))
+                log.info(f"RSSI from display: dbm={dbm} smooth={self.rssi} s={s_unit}")
+        except (ValueError, IndexError):
+            pass
 
     def _add_fragment(self, x, y, size, text, inverted, bold):
         if y < 0 or y >= LCD_LINES:
