@@ -82,27 +82,46 @@ async def _emit_lcd(state):
 
 
 async def _on_rssi(raw_data):
-    """RSSI from GET_RSSI – always returns garbage (-156), ignore."""
+    """RSSI from GET_RSSI - always returns garbage (-156), ignore."""
     pass
 
 
+
+
 async def _on_register(reg, val):
-    """Register value from radio – BK4819 RSSI via register 0x67."""
+    """Register value from radio - BK4819 RSSI via register 0x67."""
+    global _smoothed_dbm
     if reg == 0x67:
-        # BK4819 RSSI register: 9-bit value, 0.5 dB steps
         rssi_raw = val & 0x1FF
-        dbm = round((rssi_raw * 0.5) - 160)
-        logger.info(f"RSSI reg=0x67 raw={rssi_raw} val=0x{val:04X} dbm={dbm}")
-        s_points = [
-            (-140, "S0"), (-121, "S1"), (-115, "S2"), (-109, "S3"), (-103, "S4"),
-            (-97, "S5"), (-91, "S6"), (-85, "S7"), (-79, "S8"), (-73, "S9"),
-        ]
-        s_unit = "S9+"
-        for threshold, label in s_points:
-            if dbm <= threshold:
-                s_unit = label
-                break
-        await sio.emit('rssi', {'dbm': dbm, 's_unit': s_unit})
+        dbm = round((rssi_raw * 0.483) - 179)
+        # Quansheng UV-K5 calibrated by Patric
+        if rssi_raw <= 122: s_raw = 0           # S0 noise floor
+        elif rssi_raw < 170:                     # S1-S9: 48 steps / 9 = ~5.3 per S
+            s_raw = min(9, 1 + int((rssi_raw - 122) / 5.3))
+        elif rssi_raw < 191: s_raw = 10          # S9+10dB
+        elif rssi_raw < 212: s_raw = 11          # S9+20dB
+        elif rssi_raw < 233: s_raw = 12          # S9+30dB
+        elif rssi_raw < 254: s_raw = 13          # S9+40dB
+        elif rssi_raw < 275: s_raw = 14          # S9+50dB
+        else: s_raw = 15                         # S9+60dB
+        # Attack/Release smoothing on S-unit scale
+        _smoothed_s = getattr(_on_register, '_smoothed_s', 0.0)
+        if s_raw > _smoothed_s:
+            _smoothed_s = _smoothed_s + (s_raw - _smoothed_s) * 0.7
+        else:
+            _smoothed_s = _smoothed_s + (s_raw - _smoothed_s) * 0.15
+        _on_register._smoothed_s = _smoothed_s
+        s_out = round(_smoothed_s)
+        # Format S-unit for display
+        if s_out <= 0:
+            s_unit = "S0"
+        elif s_out <= 9:
+            s_unit = f"S{s_out}"
+        else:
+            s_unit = f"S9+{(s_out - 9) * 10}dB"
+        logger.info(f"RSSI raw={rssi_raw} dbm={dbm} s_out={s_out} s_unit={s_unit}")
+        # Send both dbm (for logging) and s_out (0-15 for needle)
+        await sio.emit("rssi", {"dbm": dbm, "s_unit": s_unit, "s_raw": s_out})
 
 
 async def _on_radio_connect():

@@ -14,7 +14,7 @@ class ControlModule {
         
         // Callbacks
         this.onDisplayUpdate = null;   // (drawCommands) => {}
-        this.onRssiUpdate = null;      // (dbm, sUnit) => {}
+        this.onRssiUpdate = null;      // (dbm, sUnit, sRaw) => {}
         this.onRadioState = null;      // (state) => {}
         this.onPttStatus = null;       // (active, holder) => {}
         this.onConnect = null;         // () => {}
@@ -52,7 +52,7 @@ class ControlModule {
         });
         
         this.socket.on('rssi', (data) => {
-            if (this.onRssiUpdate) this.onRssiUpdate(data.dbm, data.s_unit);
+            if (this.onRssiUpdate) this.onRssiUpdate(data.dbm, data.s_unit, data.s_raw ?? 0);
         });
         
         this.socket.on('radio_state', (data) => {

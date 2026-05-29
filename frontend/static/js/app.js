@@ -62,9 +62,9 @@ async function init() {
         }, 50);
     };
 
-    control.onRssiUpdate = (dbm, sUnit) => {
-        smeterValue.textContent = sUnit + " " + dbm + " dBm";
-        smeter.updateRX(dbm, sUnit);
+    control.onRssiUpdate = (dbm, sUnit, sRaw) => {
+        smeterValue.textContent = sUnit;
+        smeter.updateRX(sRaw);
     };
 
     control.onPttStatus = (active, holder, error) => {
@@ -74,7 +74,7 @@ async function init() {
             smeter.setTX("H");
         } else {
             pttBtn.classList.remove("active");
-            smeter.setRX(-130);
+            smeter.setRX(0);  // Reset to S0
         }
     };
 

@@ -1,6 +1,7 @@
 /**
  * Q-Remote V3 – Analog S-Meter with TX Power scale
  * Dual-scale instrument: RX signal strength + TX output power
+ * RX: takes sRaw (0-15) where 0=S0, 9=S9, 15=S9+60
  */
 
 export class AnalogSMeter {
@@ -10,13 +11,11 @@ export class AnalogSMeter {
         this.canvas.width = 260;
         this.canvas.height = 80;
 
-        // Needle state
-        this.currentAngle = 0;     // 0 = leftmost
+        this.currentAngle = 0;
         this.targetAngle = 0;
         this.decayTimer = null;
         this.isTX = false;
 
-        // Colors
         this.bgColor = '#1a1a18';
         this.scaleColor = '#c8c0a0';
         this.needleColor = '#cc2200';
@@ -26,34 +25,24 @@ export class AnalogSMeter {
         this.draw();
     }
 
-    /**
-     * Update RX signal strength.
-     */
-    updateRX(dbm, sUnit) {
+    updateRX(sRaw) {
         if (this.isTX) return;
-        // Map -160 to 0 dBm → 0 to 1
-        const normalized = Math.max(0, Math.min(1, (dbm + 160) / 130));
+        // sRaw: 0=S0, 15=S9+60 → normalized 0..1
+        const normalized = Math.max(0, Math.min(1, sRaw / 15));
         this.targetAngle = normalized;
         this.animate();
     }
 
-    /**
-     * Switch to TX mode. Shows power level.
-     */
     setTX(powerLevel) {
         this.isTX = true;
-        // L=0.15, M=0.45, H=0.85
         const levels = { 'L': 0.15, 'M': 0.45, 'H': 0.85 };
         this.targetAngle = levels[powerLevel] || 0.5;
         this.animate();
     }
 
-    /**
-     * Switch back to RX mode.
-     */
-    setRX(dbm) {
+    setRX(sRaw) {
         this.isTX = false;
-        const normalized = Math.max(0, Math.min(1, (dbm + 160) / 130));
+        const normalized = Math.max(0, Math.min(1, sRaw / 15));
         this.targetAngle = normalized;
         this.animate();
     }
@@ -82,29 +71,23 @@ export class AnalogSMeter {
         const h = this.canvas.height;
         ctx.clearRect(0, 0, w, h);
 
-        // Background
         ctx.fillStyle = this.bgColor;
         ctx.fillRect(0, 0, w, h);
 
-        // Pivot below canvas (hidden mechanism)
         const cx = w / 2;
         const cy = h + 35;
         const radius = h + 28;
 
-        // Arc sweep: from ~210° to ~330° (120° sweep centered on top)
-        const sweepAngle = Math.PI * 0.72;  // 130° total sweep
-        const startAngle = Math.PI * 1.5 - sweepAngle / 2;  // ~215°
-        const endAngle = Math.PI * 1.5 + sweepAngle / 2;    // ~325°
+        const sweepAngle = Math.PI * 0.72;
+        const startAngle = Math.PI * 1.5 - sweepAngle / 2;
+        const endAngle = Math.PI * 1.5 + sweepAngle / 2;
 
-        // ─── Scale ──────────────────────────────────────────
-        // Main arc
         ctx.beginPath();
         ctx.arc(cx, cy, radius, startAngle, endAngle);
         ctx.lineWidth = 2;
         ctx.strokeStyle = this.scaleColor;
         ctx.stroke();
 
-        // Inner arc (decorative)
         ctx.beginPath();
         ctx.arc(cx, cy, radius - 20, startAngle, endAngle);
         ctx.lineWidth = 0.5;
@@ -117,14 +100,12 @@ export class AnalogSMeter {
             this._drawRXScale(ctx, cx, cy, radius, startAngle, endAngle);
         }
 
-        // ─── Needle ─────────────────────────────────────────
+        // Needle
         const needleAngle = startAngle + this.currentAngle * (endAngle - startAngle);
         const needleLen = radius - 4;
-
         const nx = cx + Math.cos(needleAngle) * needleLen;
         const ny = cy + Math.sin(needleAngle) * needleLen;
 
-        // Needle shadow
         ctx.beginPath();
         ctx.moveTo(cx + 1, cy + 1);
         ctx.lineTo(nx + 1, ny + 1);
@@ -132,7 +113,6 @@ export class AnalogSMeter {
         ctx.strokeStyle = 'rgba(0,0,0,0.3)';
         ctx.stroke();
 
-        // Needle
         ctx.beginPath();
         ctx.moveTo(cx, cy);
         ctx.lineTo(nx, ny);
@@ -140,7 +120,6 @@ export class AnalogSMeter {
         ctx.strokeStyle = this.needleColor;
         ctx.stroke();
 
-        // Needle tip glow
         ctx.beginPath();
         ctx.arc(nx, ny, 2, 0, Math.PI * 2);
         ctx.fillStyle = this.needleColor;
@@ -150,10 +129,9 @@ export class AnalogSMeter {
     _drawRXScale(ctx, cx, cy, radius, startAngle, endAngle) {
         const totalSweep = endAngle - startAngle;
 
-        // S-unit labels
         const labels = ['1', '3', '5', '7', '9', '+20', '+40', '+60'];
 
-        // S-unit zones: slight green tint from S7 up
+        // Green zone from S7 up
         const s7Frac = 6 / 9;
         const s7Angle = startAngle + s7Frac * totalSweep;
         ctx.beginPath();
@@ -162,19 +140,16 @@ export class AnalogSMeter {
         ctx.strokeStyle = this.greenZone + '30';
         ctx.stroke();
 
-        // Main ticks and labels (S1 through S9+60)
+        // S1-S9 ticks (use 90% of arc)
         for (let i = 0; i <= 9; i++) {
             const frac = i / 9;
-            const angle = startAngle + frac * (totalSweep * 9 / 10);  // S1-S9 use 90% of arc
-
+            const angle = startAngle + frac * (totalSweep * 9 / 10);
             const isMajor = i % 2 === 0;
             const tickLen = isMajor ? 12 : 7;
-
             const x1 = cx + Math.cos(angle) * (radius - tickLen);
             const y1 = cy + Math.sin(angle) * (radius - tickLen);
             const x2 = cx + Math.cos(angle) * radius;
             const y2 = cy + Math.sin(angle) * radius;
-
             ctx.beginPath();
             ctx.moveTo(x1, y1);
             ctx.lineTo(x2, y2);
@@ -182,7 +157,6 @@ export class AnalogSMeter {
             ctx.strokeStyle = this.scaleColor;
             ctx.stroke();
 
-            // S-unit label
             if (i % 2 === 0) {
                 const labelR = radius - 22;
                 const lx = cx + Math.cos(angle) * labelR;
@@ -191,7 +165,7 @@ export class AnalogSMeter {
                 ctx.font = 'bold 10px monospace';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(`S${labels[i / 2]}`, lx, ly);
+                ctx.fillText('S' + labels[i / 2], lx, ly);
             }
         }
 
@@ -204,12 +178,10 @@ export class AnalogSMeter {
             const angle = s9Angle + frac * overSweep;
             const isMajor = i % 2 === 0;
             const tickLen = isMajor ? 12 : 7;
-
             const x1 = cx + Math.cos(angle) * (radius - tickLen);
             const y1 = cy + Math.sin(angle) * (radius - tickLen);
             const x2 = cx + Math.cos(angle) * radius;
             const y2 = cy + Math.sin(angle) * radius;
-
             ctx.beginPath();
             ctx.moveTo(x1, y1);
             ctx.lineTo(x2, y2);
@@ -229,7 +201,6 @@ export class AnalogSMeter {
             }
         }
 
-        // Mode label
         ctx.fillStyle = this.scaleColor + '80';
         ctx.font = '9px monospace';
         ctx.textAlign = 'center';
@@ -238,15 +209,12 @@ export class AnalogSMeter {
 
     _drawTXScale(ctx, cx, cy, radius, startAngle, endAngle) {
         const totalSweep = endAngle - startAngle;
-
-        // TX power levels: L, M, H with color zones
         const zones = [
             { label: 'LOW', frac: 0.25, color: '#00aa44' },
             { label: 'MED', frac: 0.55, color: '#ffaa00' },
             { label: 'HIGH', frac: 0.85, color: '#cc2200' },
         ];
 
-        // Color zones
         for (const zone of zones) {
             const angle = startAngle + zone.frac * totalSweep;
             ctx.beginPath();
@@ -256,15 +224,12 @@ export class AnalogSMeter {
             ctx.stroke();
         }
 
-        // Tick marks for L, M, H
         for (const zone of zones) {
             const angle = startAngle + zone.frac * totalSweep;
-
             const x1 = cx + Math.cos(angle) * (radius - 14);
             const y1 = cy + Math.sin(angle) * (radius - 14);
             const x2 = cx + Math.cos(angle) * radius;
             const y2 = cy + Math.sin(angle) * radius;
-
             ctx.beginPath();
             ctx.moveTo(x1, y1);
             ctx.lineTo(x2, y2);
@@ -272,7 +237,6 @@ export class AnalogSMeter {
             ctx.strokeStyle = zone.color;
             ctx.stroke();
 
-            // Label
             const labelR = radius - 24;
             const lx = cx + Math.cos(angle) * labelR;
             const ly = cy + Math.sin(angle) * labelR;
@@ -283,7 +247,6 @@ export class AnalogSMeter {
             ctx.fillText(zone.label, lx, ly);
         }
 
-        // Small ticks between
         for (let i = 0; i <= 12; i++) {
             const frac = i / 12;
             const angle = startAngle + frac * totalSweep;
@@ -299,7 +262,6 @@ export class AnalogSMeter {
             ctx.stroke();
         }
 
-        // Mode label
         ctx.fillStyle = '#cc2200';
         ctx.font = 'bold 10px monospace';
         ctx.textAlign = 'center';

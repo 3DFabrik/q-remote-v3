@@ -42,6 +42,10 @@ class RadioConnection:
         self.on_connect = None    # async ()
         self.on_disconnect = None # async ()
 
+        # RSSI polling
+        self._rssi_thread = None
+        self._rssi_interval = 0.2  # 200ms
+
     def connect(self):
         try:
             self.port = serial.Serial(
@@ -80,6 +84,9 @@ class RadioConnection:
 
             log.info("Radio init complete - Remote UI active")
             self._safe_emit('on_connect')
+            # Start RSSI polling (BK4819 register 0x67)
+            self._rssi_thread = threading.Thread(target=self._rssi_poll_loop, daemon=True)
+            self._rssi_thread.start()
             return True
         except Exception as e:
             log.error(f"Failed to connect to radio: {e}")
@@ -89,6 +96,7 @@ class RadioConnection:
     def disconnect(self):
         self._running = False
         self.connected = False
+        # RSSI poll thread will exit via self._running check
         try:
             if self.port and self.port.is_open:
                 self.port.close()
@@ -123,6 +131,19 @@ class RadioConnection:
 
     def request_screen(self):
         self.send_command(Packet.GET_SCREEN, 0x12345678)
+
+    def _rssi_poll_loop(self):
+        """Periodically poll BK4819 register 0x67 for RSSI."""
+        log.info("RSSI poll loop started (200ms interval)")
+        while self._running and self.connected:
+            try:
+                self.read_register(0x67)
+                time.sleep(self._rssi_interval)
+            except Exception as e:
+                if self._running:
+                    log.error(f"RSSI poll error: {e}")
+                    time.sleep(1)
+        log.info("RSSI poll loop stopped")
 
     def _reader_loop(self):
         while self._running:
