@@ -1,6 +1,6 @@
 /**
- * Q-Remote V3 – RX Audio Module v2
- * Test: Use ScriptProcessorNode instead of AudioWorklet for debugging
+ * Q-Remote V3 - RX Audio Module (ulaw + ScriptProcessor)
+ * Proven working on Android/iOS with user-gesture start.
  */
 
 export class RxAudio {
@@ -13,7 +13,7 @@ export class RxAudio {
         this._pcmBuffer = [];
         this._reconnectTimer = null;
 
-        // μ-law decode table
+        // ulaw decode table
         this._ulawTable = new Float32Array(256);
         for (let i = 0; i < 256; i++) {
             let u = ~i & 0xFF;
@@ -24,66 +24,51 @@ export class RxAudio {
         }
     }
 
-    _ulawDecode(byte) {
-        return this._ulawTable[byte & 0xFF];
-    }
-
     async start() {
         try {
             this.audioCtx = new (window.AudioContext || window.webkitAudioContext)({
                 sampleRate: 8000,
             });
-            console.log('[RxAudio] AudioContext sampleRate:', this.audioCtx.sampleRate);
+            console.log("[RxAudio] AudioContext sampleRate:", this.audioCtx.sampleRate);
 
-            // Use ScriptProcessorNode (deprecated but reliable for testing)
-            this.processor = this.audioCtx.createScriptProcessor(4096, 1, 1);
-            
+            this.processor = this.audioCtx.createScriptProcessor(1024, 1, 1);
             this.processor.onaudioprocess = (e) => {
                 const output = e.outputBuffer.getChannelData(0);
-                const needed = output.length;
-                
-                for (let i = 0; i < needed; i++) {
-                    if (this._pcmBuffer.length > 0) {
-                        output[i] = this._pcmBuffer.shift();
-                    } else {
-                        output[i] = 0;
-                    }
+                for (let i = 0; i < output.length; i++) {
+                    output[i] = this._pcmBuffer.length > 0 ? this._pcmBuffer.shift() : 0;
                 }
             };
-
             this.processor.connect(this.audioCtx.destination);
 
             this._connectWS();
         } catch (e) {
-            console.error('[RxAudio] Failed to start:', e);
+            console.error("[RxAudio] Failed to start:", e);
             this._reconnectTimer = setTimeout(() => this.start(), 2000);
         }
     }
 
     _connectWS() {
-        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${location.host}/audio/rx`;
-        console.log('[RxAudio] Connecting to', wsUrl);
+        const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+        const wsUrl = protocol + "//" + location.host + "/audio/rx";
+        console.log("[RxAudio] Connecting to", wsUrl);
 
         this.ws = new WebSocket(wsUrl);
-        this.ws.binaryType = 'arraybuffer';
+        this.ws.binaryType = "arraybuffer";
 
         this.ws.onopen = () => {
             this.connected = true;
-            console.log('[RxAudio] WebSocket connected');
-            if (this.audioCtx && this.audioCtx.state === 'suspended') {
+            console.log("[RxAudio] WebSocket connected");
+            if (this.audioCtx && this.audioCtx.state === "suspended") {
                 this.audioCtx.resume();
             }
         };
 
         this.ws.onmessage = (event) => {
             if (this.muted) return;
-            // μ-law encoded bytes → decode to float
             const bytes = new Uint8Array(event.data);
             for (let i = 0; i < bytes.length; i++) {
-                this._pcmBuffer.push(this._ulawDecode(bytes[i]));
+                this._pcmBuffer.push(this._ulawTable[bytes[i]]);
             }
-            // Prevent buffer from growing too large (max 2 seconds)
             while (this._pcmBuffer.length > 16000) {
                 this._pcmBuffer.shift();
             }
@@ -91,12 +76,12 @@ export class RxAudio {
 
         this.ws.onclose = () => {
             this.connected = false;
-            console.log('[RxAudio] WebSocket closed, reconnecting...');
+            console.log("[RxAudio] WebSocket closed, reconnecting...");
             this._reconnectTimer = setTimeout(() => this._connectWS(), 1000);
         };
 
         this.ws.onerror = (e) => {
-            console.error('[RxAudio] WebSocket error:', e);
+            console.error("[RxAudio] WebSocket error:", e);
         };
     }
 
