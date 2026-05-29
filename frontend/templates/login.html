@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Q-Remote V3 – Login</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+        :root {
+            --panel: #b8b0a0;
+            --panel-dark: #a09888;
+            --panel-border: #706858;
+            --amber: #ffaa00;
+            --amber-glow: #ffcc44;
+            --phosphor: #00ff41;
+            --white: #e8e0d0;
+            --bg: #2a2520;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg);
+            color: var(--white);
+            font-family: 'Share Tech Mono', 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-image:
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+        }
+        .login-box {
+            background: var(--panel);
+            padding: 32px;
+            border-radius: 6px;
+            border: 2px solid var(--panel-border);
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.3),
+                inset 0 -1px 0 rgba(0,0,0,0.2),
+                0 4px 12px rgba(0,0,0,0.5);
+            width: 100%;
+            max-width: 380px;
+            position: relative;
+        }
+        .login-box::before, .login-box::after {
+            content: '';
+            position: absolute;
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 40% 40%, #888, #555);
+            border: 1px solid #444;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+        }
+        .login-box::before { top: 6px; left: 6px; }
+        .login-box::after { top: 6px; right: 6px; }
+        .panel-label {
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: #504840;
+            text-align: center;
+            margin-bottom: 16px;
+            padding-top: 8px;
+            font-weight: bold;
+        }
+        .login-box h1 {
+            text-align: center;
+            margin-bottom: 4px;
+            font-size: 20px;
+            color: #504840;
+            letter-spacing: 2px;
+        }
+        .login-box .subtitle {
+            text-align: center;
+            color: #706858;
+            margin-bottom: 24px;
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+        }
+        .form-group {
+            margin-bottom: 14px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.65rem;
+            color: #504840;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid var(--panel-border);
+            border-radius: 4px;
+            background: var(--bg);
+            color: var(--phosphor);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 15px;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--amber);
+            box-shadow: 0 0 8px rgba(255,170,0,0.3);
+        }
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: #504840;
+            color: var(--amber);
+            border: 2px solid var(--panel-border);
+            border-radius: 4px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 14px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        .login-btn:hover {
+            background: #605850;
+            box-shadow: 0 0 12px rgba(255,170,0,0.2);
+        }
+        .error {
+            color: #cc2200;
+            text-align: center;
+            margin-bottom: 12px;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <div class="panel-label">Authentication — Panel A1</div>
+        <h1>📡 Q-REMOTE V3</h1>
+        <p class="subtitle">Mission Control Access</p>
+        {% if error %}
+        <div class="error">⚠ {{ error }}</div>
+        {% endif %}
+        <form method="POST" action="/login">
+            <div class="form-group">
+                <label>Callsign / Benutzer</label>
+                <input type="text" name="username" autocomplete="username" autofocus required>
+            </div>
+            <div class="form-group">
+                <label>Passwort</label>
+                <input type="password" name="password" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="login-btn">▸ Authenticate</button>
+        </form>
+    </div>
+</body>
+</html>

@@ -5,12 +5,15 @@ Uses V1's LCDDisplay to process type 5/6 packets into display fragments.
 import asyncio
 import logging
 from typing import Optional
+from http.cookies import SimpleCookie
+from starlette.middleware.sessions import SessionMiddleware
 
 import socketio
 
 from backend.radio.connection import RadioConnection
 from backend.radio.protocol import Packet
 from backend.radio.lcd import LCDDisplay
+from backend.auth import USERS, SECRET_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +27,34 @@ sio = socketio.AsyncServer(
 radio: Optional[RadioConnection] = None
 lcd: Optional[LCDDisplay] = None
 _ptt_owner: Optional[str] = None
+
+
+def _get_user_from_environ(environ: dict) -> Optional[str]:
+    """Extract username from session cookie in SocketIO environ."""
+    from starlette.requests import Request
+    from http.cookies import SimpleCookie
+
+    cookie_str = environ.get('HTTP_COOKIE', '')
+    if not cookie_str:
+        return None
+
+    # Use starlette's SessionMiddleware to decode the session
+    # We need to decode the signed cookie manually
+    try:
+        from starlette.middleware.sessions import SessionMiddleware
+        import itsdangerous
+        signer = itsdangerous.TimestampSigner(SECRET_KEY)
+        cookie = SimpleCookie()
+        cookie.load(cookie_str)
+        session_cookie = cookie.get('session')
+        if session_cookie:
+            data = signer.unsign(session_cookie.value, max_age=None)
+            import base64, json
+            session_data = json.loads(base64.b64decode(data))
+            return session_data.get('user')
+    except Exception as e:
+        logger.debug(f"Session decode failed: {e}")
+    return None
 
 
 def init_radio():
@@ -138,7 +169,15 @@ async def _on_radio_disconnect():
 
 @sio.event
 async def connect(sid, environ):
-    logger.info(f"Client connected: {sid}")
+    # Auth check: verify session cookie
+    user = _get_user_from_environ(environ)
+    if not user:
+        logger.warning(f"SocketIO connect rejected (no session): {sid}")
+        return False  # Reject connection
+
+    logger.info(f"Client connected: {sid} (user={user})")
+    # Store user on sid for later use
+    await sio.save_session(sid, {'user': user})
     if radio and radio.connected:
         await sio.emit('radio_state', {'state': 'connected'}, to=sid)
         # Send current LCD state immediately

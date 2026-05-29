@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Q-Remote V3 – Logs</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+        :root {
+            --panel: #b8b0a0;
+            --panel-border: #706858;
+            --panel-inner: #504840;
+            --amber: #ffaa00;
+            --phosphor: #00ff41;
+            --red: #cc2200;
+            --white: #e8e0d0;
+            --bg: #2a2520;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg);
+            color: var(--white);
+            font-family: 'Share Tech Mono', 'Courier New', monospace;
+            padding: 20px;
+            background-image:
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        .instrument-panel {
+            background: var(--panel);
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 2px solid var(--panel-border);
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.3),
+                inset 0 -1px 0 rgba(0,0,0,0.2),
+                0 4px 12px rgba(0,0,0,0.5);
+            position: relative;
+        }
+        .panel-label {
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: #504840;
+            text-align: center;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        h1 {
+            color: #504840;
+            margin-bottom: 16px;
+            font-size: 1.2rem;
+            letter-spacing: 2px;
+            text-align: center;
+        }
+        .nav { margin-bottom: 16px; text-align: center; }
+        .nav a {
+            color: var(--panel-inner);
+            text-decoration: none;
+            margin: 0 10px;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+        }
+        .nav a:hover { text-decoration: underline; }
+        .logs {
+            background: #0a0f0a;
+            padding: 16px;
+            border-radius: 4px;
+            border: 1px solid rgba(0,0,0,0.15);
+            font-family: 'Share Tech Mono', 'Courier New', monospace;
+            font-size: 0.75rem;
+            max-height: 70vh;
+            overflow-y: auto;
+            line-height: 1.7;
+        }
+        .logs .login { color: var(--phosphor); }
+        .logs .logout { color: var(--amber); }
+        .logs .tx { color: var(--red); }
+        .logs .admin { color: #3498db; }
+        .count {
+            color: #706858;
+            font-size: 0.75rem;
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="instrument-panel">
+            <div class="panel-label">Activity Log — Panel L1</div>
+            <h1>📋 MISSION LOG</h1>
+            <div class="nav">
+                <a href="/admin">◂ Admin</a>
+                <a href="/admin/logs/download">⬇ Download</a>
+                <a href="/">📻 Radio</a>
+                <a href="/logout">🚪 Logout</a>
+            </div>
+            <p class="count">{{ entries|length }} Einträge (neueste zuerst)</p>
+            <div class="logs">
+            {% for entry in entries %}
+                {% if 'LOGIN' in entry %}<div class="login">{{ entry }}</div>
+                {% elif 'LOGOUT' in entry %}<div class="logout">{{ entry }}</div>
+                {% elif 'TX_' in entry %}<div class="tx">{{ entry }}</div>
+                {% elif 'USER' in entry %}<div class="admin">{{ entry }}</div>
+                {% else %}<div>{{ entry }}</div>
+                {% endif %}
+            {% endfor %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>
