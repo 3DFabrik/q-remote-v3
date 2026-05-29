@@ -1,12 +1,12 @@
 /**
- * Q-Remote V3 – Main Application
- * Uses V1 lcd_update events for display rendering.
+ * Q-Remote V3 - Main Application
  */
 
 import { control } from "./control.js";
 import { DisplayRenderer } from "./display.js";
 import { AnalogSMeter } from "./smeter.js";
 import { RxAudio } from "./audio.js";
+import { TxAudio } from "./tx_audio.js";
 
 const state = {
     radioConnected: false,
@@ -23,6 +23,7 @@ const lcdCanvas = document.getElementById("lcd");
 const display = new DisplayRenderer(lcdCanvas);
 const smeter = new AnalogSMeter(smeterCanvas);
 const rxAudio = new RxAudio();
+const txAudio = new TxAudio();
 
 async function init() {
     console.log("Q-Remote V3 starting...");
@@ -105,9 +106,13 @@ function setupPTT() {
     pttBtn.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         control.pttOn();
+        txAudio.startTransmit();
     });
     const release = () => {
-        if (state.pttActive) control.pttOff();
+        if (state.pttActive) {
+            control.pttOff();
+        }
+        txAudio.stopTransmit();
     };
     pttBtn.addEventListener("pointerup", release);
     pttBtn.addEventListener("pointerleave", release);
@@ -122,14 +127,17 @@ function setupAudioToggle() {
     audioBtn.addEventListener("click", async () => {
         if (!audioActive) {
             audioBtn.classList.add("active");
-            audioIcon.textContent = "🔊";
+            audioIcon.textContent = "\u{1F50A}";
             audioActive = true;
+            // Start both RX and TX audio (TX needs user gesture for mic)
             await rxAudio.start();
+            await txAudio.start();
         } else {
             audioBtn.classList.remove("active");
-            audioIcon.textContent = "🔇";
+            audioIcon.textContent = "\u{1F507}";
             audioActive = false;
             rxAudio.stop();
+            txAudio.stop();
         }
     });
 }
