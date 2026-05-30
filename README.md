@@ -4,6 +4,10 @@ Web-based remote control for Quansheng UV-K5 ham radio. Access your radio from a
 
 ![Q-Remote V3 Screenshot](docs/screenshot.jpg)
 
+*Login panel:*
+
+![Login Panel](docs/screenshot-login.jpg)
+
 ## Features
 
 ### ✅ Working
