@@ -12,6 +12,10 @@ Web-based remote control for Quansheng UV-K5 ham radio. Access your radio from a
 
 ![TX MOD Meter](docs/screenshot-tx-mod.jpg)
 
+*Admin panel – user management:*
+
+![Admin Panel](docs/screenshot-admin.jpg)
+
 ## Features
 
 ### ✅ Working
