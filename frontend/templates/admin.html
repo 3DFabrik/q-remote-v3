@@ -169,6 +169,17 @@
                 {% endfor %}
             </table>
 
+            <h2>TX Audio Pegel (AIOC Output)</h2>
+            <div style="display:flex; align-items:center; gap:16px; padding:12px; background:rgba(0,0,0,0.08); border-radius:4px;">
+                <input type="range" id="tx-gain-slider" min="-30" max="4" step="0.5" value="{{ tx_gain }}"
+                       style="flex:1; accent-color:var(--amber); cursor:pointer;">
+                <span id="tx-gain-value" style="color:var(--amber); font-size:1.1rem; min-width:80px; text-align:right;">{{ "%.1f"|format(tx_gain) }} dB</span>
+            </div>
+            <p style="font-size:0.65rem; color:#706858; margin-top:6px;">
+                Steuert den ALSA PCM Playback Volume der AIOC. 0 dB = Unity, negative Werte = leiser.
+                Verhindert Übersteuerung des Senders.
+            </p>
+
             <h2>Neuer Benutzer</h2>
             <form method="POST" action="/admin/users" class="add-form">
                 <input type="hidden" name="action" value="add">
@@ -179,5 +190,28 @@
             </form>
         </div>
     </div>
+
+    <script>
+        const gainSlider = document.getElementById('tx-gain-slider');
+        const gainValue = document.getElementById('tx-gain-value');
+        let saveTimeout = null;
+
+        gainSlider.addEventListener('input', () => {
+            const db = parseFloat(gainSlider.value);
+            gainValue.textContent = db.toFixed(1) + ' dB';
+            // Debounce: save 300ms after last change
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+                fetch('/api/tx-gain', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({gain_db: db})
+                }).then(r => r.json()).then(data => {
+                    gainSlider.value = data.gain_db;
+                    gainValue.textContent = data.gain_db.toFixed(1) + ' dB';
+                });
+            }, 300);
+        });
+    </script>
 </body>
 </html>

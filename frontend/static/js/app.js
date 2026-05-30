@@ -25,6 +25,13 @@ const smeter = new AnalogSMeter(smeterCanvas);
 const rxAudio = new RxAudio();
 const txAudio = new TxAudio();
 
+// Wire up mic level to S-meter during TX
+txAudio.onMicLevel = (rms) => {
+    if (state.pttActive) {
+        smeter.updateTXLevel(rms);
+    }
+};
+
 async function init() {
     console.log("Q-Remote V3 starting...");
 
@@ -71,7 +78,10 @@ async function init() {
         state.pttActive = active;
         if (active) {
             pttBtn.classList.add("active");
-            smeter.setTX("H");
+            // Don't set static TX level – mic meter will drive the needle
+            smeter.isTX = true;
+            smeter.targetAngle = 0;
+            smeter.draw();
         } else {
             pttBtn.classList.remove("active");
             smeter.setRX(0);  // Reset to S0
@@ -82,6 +92,9 @@ async function init() {
     setupButtons();
     setupPTT();
     setupAudioToggle();
+
+    // Auto-start audio on load
+    startAudio();
 }
 
 function setupButtons() {
@@ -119,25 +132,32 @@ function setupPTT() {
     pttBtn.addEventListener("pointercancel", release);
 }
 
-function setupAudioToggle() {
-    const audioBtn = document.getElementById("audio-btn");
-    const audioIcon = audioBtn.querySelector(".audio-icon");
-    let audioActive = false;
+let audioActive = false;
+const audioBtn = document.getElementById("audio-btn");
+const audioIcon = audioBtn.querySelector(".audio-icon");
 
+async function startAudio() {
+    audioBtn.classList.add("active");
+    audioIcon.textContent = "\u{1F50A}";
+    audioActive = true;
+    await rxAudio.start();
+    await txAudio.start();
+}
+
+function stopAudio() {
+    audioBtn.classList.remove("active");
+    audioIcon.textContent = "\u{1F507}";
+    audioActive = false;
+    rxAudio.stop();
+    txAudio.stop();
+}
+
+function setupAudioToggle() {
     audioBtn.addEventListener("click", async () => {
         if (!audioActive) {
-            audioBtn.classList.add("active");
-            audioIcon.textContent = "\u{1F50A}";
-            audioActive = true;
-            // Start both RX and TX audio (TX needs user gesture for mic)
-            await rxAudio.start();
-            await txAudio.start();
+            await startAudio();
         } else {
-            audioBtn.classList.remove("active");
-            audioIcon.textContent = "\u{1F507}";
-            audioActive = false;
-            rxAudio.stop();
-            txAudio.stop();
+            stopAudio();
         }
     });
 }

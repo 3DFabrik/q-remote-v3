@@ -16,6 +16,7 @@ class LCDDisplay:
         self.smeter = 0
         self.rssi = -120
         self._rssi_history = []
+        self._last_rssi_time = 0.0
         self.state = 'idle'
         self.battery_v = 0.0
         self.battery_pct = 0
@@ -77,8 +78,8 @@ class LCDDisplay:
             x = val1
             while x > 128: y += 1; x -= 128
             self._add_fragment(x, y, val3 / 6.0, text, False, False)
-            # Parse RSSI from display text like "-112 S3"
-            if 'S' in text and y >= 3:
+            # Parse RSSI from display line y=3 (signal info line)
+            if y == 3 or y == 4:  # y=3 on single-VFO, y=4 possible on dual
                 self._parse_rssi_text(text)
         elif ui_type == 2:
             text = data.decode('ascii', errors='replace') if data else ""
@@ -109,20 +110,38 @@ class LCDDisplay:
             self.smeter = val1
 
     def _parse_rssi_text(self, text):
-        """Extract dBm and S-unit from radio display text like '-112 S3'."""
+        """Extract dBm from radio display text.
+        
+        Formats:
+          Normal:  '-107 S3'   → dBm + S-unit
+          Over S9: '-36  40'   → dBm + dB over S9
+        """
         try:
-            parts = text.strip().split()
+            text = text.strip()
+            parts = text.split()
+            if not parts:
+                return
+            dbm = int(parts[0])
+            self._last_rssi_time = time.time()
+            # Instant value – display text is already stable
+            self.rssi = dbm
             if len(parts) >= 2:
-                dbm = int(parts[0])
-                s_unit = parts[1]
-                # Smooth: running average of last 4 readings
-                self._rssi_history.append(dbm)
-                if len(self._rssi_history) > 4:
-                    self._rssi_history.pop(0)
-                self.rssi = round(sum(self._rssi_history) / len(self._rssi_history))
-                log.info(f"RSSI from display: dbm={dbm} smooth={self.rssi} s={s_unit}")
+                s_part = parts[1]
+                if s_part.startswith('S'):
+                    log.info(f"RSSI from display: dbm={dbm} {s_part}")
+                else:
+                    log.info(f"RSSI from display: dbm={dbm} S9+{s_part}dB")
+            else:
+                log.info(f"RSSI from display: dbm={dbm}")
         except (ValueError, IndexError):
             pass
+
+    def check_rssi_timeout(self):
+        """Reset RSSI immediately if no new display text since last check."""
+        if self._last_rssi_time > 0 and time.time() - self._last_rssi_time > 0.5:
+            self.rssi = -120
+            self._last_rssi_time = 0
+            log.info("RSSI: no display text, resetting to -120")
 
     def _add_fragment(self, x, y, size, text, inverted, bold):
         if y < 0 or y >= LCD_LINES:

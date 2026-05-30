@@ -1,7 +1,7 @@
 /**
- * Q-Remote V3 – Analog S-Meter with TX Power scale
- * Dual-scale instrument: RX signal strength + TX output power
- * RX: takes sRaw (0-15) where 0=S0, 9=S9, 15=S9+60
+ * Q-Remote V3 – Analog S-Meter with dual scale
+ * RX: Signal strength (S-units)
+ * TX: Mic modulation level (dBFS, 0 dB = clipping)
  */
 
 export class AnalogSMeter {
@@ -27,27 +27,47 @@ export class AnalogSMeter {
 
     updateRX(sRaw) {
         if (this.isTX) return;
-        // sRaw: 0=S0, 15=S9+60 → normalized 0..1
         const normalized = Math.max(0, Math.min(1, sRaw / 15));
         this.targetAngle = normalized;
-        this.animate();
+        this.animate('rx');
     }
 
     setTX(powerLevel) {
+        // Legacy: static TX display (kept for compatibility)
         this.isTX = true;
         const levels = { 'L': 0.15, 'M': 0.45, 'H': 0.85 };
         this.targetAngle = levels[powerLevel] || 0.5;
-        this.animate();
+        this.animate('tx');
+    }
+
+    /**
+     * Update meter with live mic level during TX.
+     * @param {number} rms - RMS level 0..1 (1.0 = 0 dBFS = clipping)
+     */
+    updateTXLevel(rms) {
+        if (!this.isTX) {
+            this.isTX = true;
+        }
+        // Convert RMS to dB: 0 dBFS = rms 1.0
+        // Map range: -40 dBFS .. 0 dBFS → 0..1
+        // rms 0 → -inf → 0, rms 1.0 → 0 dB → 1.0
+        const minDb = -40;
+        let db = rms > 0 ? 20 * Math.log10(rms) : minDb;
+        db = Math.max(minDb, Math.min(0, db));
+        const normalized = (db - minDb) / (0 - minDb);  // 0 at -40dB, 1 at 0dB
+        this.targetAngle = normalized;
+        this.animate('tx');
     }
 
     setRX(sRaw) {
         this.isTX = false;
         const normalized = Math.max(0, Math.min(1, sRaw / 15));
         this.targetAngle = normalized;
-        this.animate();
+        this.animate('rx');
     }
 
-    animate() {
+    animate(mode) {
+        // Always update target; if animation is running it will pick up the new value
         if (this.decayTimer) return;
         const step = () => {
             const diff = this.targetAngle - this.currentAngle;
@@ -57,7 +77,14 @@ export class AnalogSMeter {
                 this.decayTimer = null;
                 return;
             }
-            const speed = diff > 0 ? 0.12 : 0.03;
+            // RX: slow, smooth (like a real S-meter)
+            // TX: fast attack, moderate decay (VU-meter style)
+            let speed;
+            if (mode === 'rx') {
+                speed = diff > 0 ? 0.2 : 0.08;
+            } else {
+                speed = diff > 0 ? 0.35 : 0.15;
+            }
             this.currentAngle += diff * speed;
             this.draw();
             this.decayTimer = requestAnimationFrame(step);
@@ -129,23 +156,38 @@ export class AnalogSMeter {
     _drawRXScale(ctx, cx, cy, radius, startAngle, endAngle) {
         const totalSweep = endAngle - startAngle;
 
-        const labels = ['1', '3', '5', '7', '9', '+20', '+40', '+60'];
+        // All ticks mapped linearly to s_raw (0-15)
+        // s_raw 0=S0, 1=S1, ..., 9=S9, 10=S9+10, ..., 15=S9+60
+        const tickDefs = [
+            { s: 1, label: 'S1', color: this.scaleColor, major: false },
+            { s: 2, label: 'S2', color: this.scaleColor, major: true },
+            { s: 3, label: 'S3', color: this.scaleColor, major: false },
+            { s: 4, label: 'S4', color: this.scaleColor, major: true },
+            { s: 5, label: 'S5', color: this.scaleColor, major: false },
+            { s: 6, label: 'S6', color: this.greenZone, major: true },
+            { s: 7, label: 'S7', color: this.greenZone, major: false },
+            { s: 8, label: 'S8', color: this.greenZone, major: true },
+            { s: 9, label: 'S9', color: this.accentColor, major: true },
+            { s: 10, label: '+10', color: this.accentColor, major: false },
+            { s: 11, label: '+20', color: this.accentColor, major: true },
+            { s: 12, label: '+30', color: this.accentColor, major: false },
+            { s: 13, label: '+40', color: this.accentColor, major: true },
+            { s: 14, label: '+50', color: this.accentColor, major: false },
+            { s: 15, label: '+60', color: this.accentColor, major: true },
+        ];
 
-        // Green zone from S7 up
-        const s7Frac = 6 / 9;
-        const s7Angle = startAngle + s7Frac * totalSweep;
+        // Green zone from S6 up
+        const s6Angle = startAngle + (6 / 15) * totalSweep;
         ctx.beginPath();
-        ctx.arc(cx, cy, radius - 1, s7Angle, endAngle);
+        ctx.arc(cx, cy, radius - 1, s6Angle, endAngle);
         ctx.lineWidth = 4;
         ctx.strokeStyle = this.greenZone + '30';
         ctx.stroke();
 
-        // S1-S9 ticks (use 90% of arc)
-        for (let i = 0; i <= 9; i++) {
-            const frac = i / 9;
-            const angle = startAngle + frac * (totalSweep * 9 / 10);
-            const isMajor = i % 2 === 0;
-            const tickLen = isMajor ? 12 : 7;
+        for (const tick of tickDefs) {
+            const frac = tick.s / 15;
+            const angle = startAngle + frac * totalSweep;
+            const tickLen = tick.major ? 12 : 7;
             const x1 = cx + Math.cos(angle) * (radius - tickLen);
             const y1 = cy + Math.sin(angle) * (radius - tickLen);
             const x2 = cx + Math.cos(angle) * radius;
@@ -153,51 +195,19 @@ export class AnalogSMeter {
             ctx.beginPath();
             ctx.moveTo(x1, y1);
             ctx.lineTo(x2, y2);
-            ctx.lineWidth = isMajor ? 1.5 : 0.8;
-            ctx.strokeStyle = this.scaleColor;
+            ctx.lineWidth = tick.major ? 1.5 : 0.8;
+            ctx.strokeStyle = tick.color;
             ctx.stroke();
 
-            if (i % 2 === 0) {
+            if (tick.major) {
                 const labelR = radius - 22;
                 const lx = cx + Math.cos(angle) * labelR;
                 const ly = cy + Math.sin(angle) * labelR;
-                ctx.fillStyle = i >= 7 ? this.greenZone : this.scaleColor;
-                ctx.font = 'bold 10px monospace';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText('S' + labels[i / 2], lx, ly);
-            }
-        }
-
-        // +dB over S9 ticks
-        const overLabels = ['+20', '+40', '+60'];
-        const s9Angle = startAngle + (9 / 9) * (totalSweep * 9 / 10);
-        const overSweep = totalSweep * 1 / 10;
-        for (let i = 0; i <= 6; i++) {
-            const frac = i / 6;
-            const angle = s9Angle + frac * overSweep;
-            const isMajor = i % 2 === 0;
-            const tickLen = isMajor ? 12 : 7;
-            const x1 = cx + Math.cos(angle) * (radius - tickLen);
-            const y1 = cy + Math.sin(angle) * (radius - tickLen);
-            const x2 = cx + Math.cos(angle) * radius;
-            const y2 = cy + Math.sin(angle) * radius;
-            ctx.beginPath();
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2, y2);
-            ctx.lineWidth = isMajor ? 1.5 : 0.8;
-            ctx.strokeStyle = this.accentColor;
-            ctx.stroke();
-
-            if (isMajor && i > 0) {
-                const labelR = radius - 22;
-                const lx = cx + Math.cos(angle) * labelR;
-                const ly = cy + Math.sin(angle) * labelR;
-                ctx.fillStyle = this.accentColor;
+                ctx.fillStyle = tick.color;
                 ctx.font = 'bold 9px monospace';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(overLabels[(i / 2) - 1] || '', lx, ly);
+                ctx.fillText(tick.label, lx, ly);
             }
         }
 
@@ -209,46 +219,82 @@ export class AnalogSMeter {
 
     _drawTXScale(ctx, cx, cy, radius, startAngle, endAngle) {
         const totalSweep = endAngle - startAngle;
-        const zones = [
-            { label: 'LOW', frac: 0.25, color: '#00aa44' },
-            { label: 'MED', frac: 0.55, color: '#ffaa00' },
-            { label: 'HIGH', frac: 0.85, color: '#cc2200' },
+
+        // dBFS scale: -40 dB .. 0 dB (0 = clipping)
+        // Green: -40 .. -12, Yellow: -12 .. -3, Red: -3 .. 0
+        const greenEnd = (-12 + 40) / 40;   // 0.7
+        const yellowEnd = (-3 + 40) / 40;    // 0.925
+
+        // Green zone arc
+        const greenStartAngle = startAngle;
+        const greenEndAngle = startAngle + greenEnd * totalSweep;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius - 1, greenStartAngle, greenEndAngle);
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#00aa4430';
+        ctx.stroke();
+
+        // Yellow zone arc
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius - 1, greenEndAngle, startAngle + yellowEnd * totalSweep);
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#ffaa0030';
+        ctx.stroke();
+
+        // Red zone arc
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius - 1, startAngle + yellowEnd * totalSweep, endAngle);
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#cc220040';
+        ctx.stroke();
+
+        // dB labels: -40, -30, -20, -10, -6, -3, 0
+        const dbLabels = [
+            { db: -40, label: '-40' },
+            { db: -30, label: '-30' },
+            { db: -20, label: '-20' },
+            { db: -10, label: '-10' },
+            { db: -6, label: '-6' },
+            { db: -3, label: '-3' },
+            { db: 0, label: '0' },
         ];
 
-        for (const zone of zones) {
-            const angle = startAngle + zone.frac * totalSweep;
-            ctx.beginPath();
-            ctx.arc(cx, cy, radius - 1, angle - 0.15, angle + 0.15);
-            ctx.lineWidth = 5;
-            ctx.strokeStyle = zone.color + '50';
-            ctx.stroke();
-        }
+        for (const tick of dbLabels) {
+            const frac = (tick.db + 40) / 40;  // -40→0, 0→1
+            const angle = startAngle + frac * totalSweep;
 
-        for (const zone of zones) {
-            const angle = startAngle + zone.frac * totalSweep;
-            const x1 = cx + Math.cos(angle) * (radius - 14);
-            const y1 = cy + Math.sin(angle) * (radius - 14);
+            // Major ticks for all labeled points
+            const tickLen = tick.db === 0 ? 14 : 10;
+            const x1 = cx + Math.cos(angle) * (radius - tickLen);
+            const y1 = cy + Math.sin(angle) * (radius - tickLen);
             const x2 = cx + Math.cos(angle) * radius;
             const y2 = cy + Math.sin(angle) * radius;
+
+            let color;
+            if (tick.db >= -3) color = '#cc2200';
+            else if (tick.db >= -12) color = '#ffaa00';
+            else color = this.scaleColor;
+
             ctx.beginPath();
             ctx.moveTo(x1, y1);
             ctx.lineTo(x2, y2);
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = zone.color;
+            ctx.lineWidth = tick.db === 0 ? 2.5 : 1.5;
+            ctx.strokeStyle = color;
             ctx.stroke();
 
-            const labelR = radius - 24;
+            const labelR = radius - 22;
             const lx = cx + Math.cos(angle) * labelR;
             const ly = cy + Math.sin(angle) * labelR;
-            ctx.fillStyle = zone.color;
-            ctx.font = 'bold 10px monospace';
+            ctx.fillStyle = color;
+            ctx.font = tick.db === 0 ? 'bold 11px monospace' : 'bold 9px monospace';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(zone.label, lx, ly);
+            ctx.fillText(tick.label, lx, ly);
         }
 
-        for (let i = 0; i <= 12; i++) {
-            const frac = i / 12;
+        // Minor ticks every 5 dB: -35, -25, -15, -5
+        for (let db = -35; db <= -5; db += 10) {
+            const frac = (db + 40) / 40;
             const angle = startAngle + frac * totalSweep;
             const x1 = cx + Math.cos(angle) * (radius - 5);
             const y1 = cy + Math.sin(angle) * (radius - 5);
@@ -262,9 +308,16 @@ export class AnalogSMeter {
             ctx.stroke();
         }
 
+        // "dBFS" label
+        ctx.fillStyle = this.scaleColor + '60';
+        ctx.font = '8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('dBFS', cx, cy - radius + 50);
+
+        // "MOD" label (instead of "TX")
         ctx.fillStyle = '#cc2200';
         ctx.font = 'bold 10px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('TX', cx, cy - radius + 42);
+        ctx.fillText('MOD', cx, cy - radius + 42);
     }
 }

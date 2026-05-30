@@ -1,6 +1,7 @@
 /**
  * Q-Remote V3 – TX Audio Module
  * Captures browser mic audio, encodes to μ-law, sends via WebSocket.
+ * Reports RMS mic level for modulation meter.
  */
 
 export class TxAudio {
@@ -12,31 +13,37 @@ export class TxAudio {
         this.connected = false;
         this.transmitting = false;
 
+        // Mic level callback: onMicLevel(normalized 0..1)
+        this.onMicLevel = null;
+
         // μ-law encode table (linear → μ-law)
         this._ulawEncode = new Uint8Array(65536);
         this._buildEncodeTable();
     }
 
     _buildEncodeTable() {
+        // Standard G.711 μ-law with BIAS=0x84, CLIP=32635
+        // Identical to the working rx_pipeline.py encoder
+        const BIAS = 0x84;
+        const CLIP = 32635;
         for (let i = 0; i < 65536; i++) {
-            // Map index to signed 16-bit
-            let s = i - 32768;
-            if (s < 0) s = -s;
-            const sign = (i - 32768) < 0 ? 0x80 : 0;
-
-            // μ-law companding
-            let exp, mantissa;
-            if (s > 8158) { exp = 7; mantissa = (s - 8159) >> 5; }
-            else if (s > 4063) { exp = 6; mantissa = (s - 4063) >> 4; }
-            else if (s > 2031) { exp = 5; mantissa = (s - 2031) >> 3; }
-            else if (s > 1007) { exp = 4; mantissa = (s - 1007) >> 2; }
-            else if (s > 495) { exp = 3; mantissa = (s - 495) >> 1; }
-            else if (s > 239) { exp = 2; mantissa = s - 239; }
-            else if (s > 111) { exp = 1; mantissa = s - 111; }
-            else { exp = 0; mantissa = s - 15; }
-
-            mantissa = Math.max(0, Math.min(mantissa, 15));
-            this._ulawEncode[i] = ~(sign | (exp << 4) | mantissa) & 0xFF;
+            let sample = i - 32768;  // index = s16 + 32768
+            if (sample > CLIP) sample = CLIP;
+            else if (sample < -CLIP) sample = -CLIP;
+            const sign = sample < 0 ? 0x80 : 0x00;
+            if (sign) sample = -sample;
+            sample += BIAS;
+            let exp;
+            if (sample >= 0x4000) exp = 7;
+            else if (sample >= 0x2000) exp = 6;
+            else if (sample >= 0x1000) exp = 5;
+            else if (sample >= 0x0800) exp = 4;
+            else if (sample >= 0x0400) exp = 3;
+            else if (sample >= 0x0200) exp = 2;
+            else if (sample >= 0x0100) exp = 1;
+            else exp = 0;
+            const mantissa = (sample >> (exp + 3)) & 0x0F;
+            this._ulawEncode[i] = (~(sign | (exp << 4) | mantissa)) & 0xFF;
         }
     }
 
@@ -70,10 +77,23 @@ export class TxAudio {
             this.processor = this.audioCtx.createScriptProcessor(1024, 1, 1);
 
             this.processor.onaudioprocess = (e) => {
+                const input = e.inputBuffer.getChannelData(0);
+
+                // Always calculate RMS level (even when not transmitting, for meter)
+                if (this.transmitting && this.onMicLevel) {
+                    let sum = 0;
+                    for (let i = 0; i < input.length; i++) {
+                        sum += input[i] * input[i];
+                    }
+                    const rms = Math.sqrt(sum / input.length);
+                    // Normalize: RMS of 1.0 = 0 dBFS = full scale
+                    // Smooth slightly to avoid jitter
+                    this.onMicLevel(Math.min(1.0, rms));
+                }
+
                 if (!this.transmitting || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
                     return;
                 }
-                const input = e.inputBuffer.getChannelData(0);
                 // Convert float → 16-bit PCM → μ-law
                 const ulaw = new Uint8Array(input.length);
                 for (let i = 0; i < input.length; i++) {

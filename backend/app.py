@@ -3,6 +3,8 @@
 import asyncio
 import json
 import logging
+import subprocess
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -32,6 +34,41 @@ rx_audio = RxPipeline()
 tx_audio = TxPipeline()
 
 jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
+
+# ─── ALSA Gain Control ─────────────────────────────────────────────
+
+_CARD = "hw:CARD=AllInOneCable,DEV=0"
+_CARD_NUM = 0  # ALSA card index for amixer
+
+def get_tx_gain_db() -> float:
+    """Read current TX PCM playback volume in dB from ALSA."""
+    try:
+        result = subprocess.run(
+            ["amixer", "-c", str(_CARD_NUM), "get", "PCM"],
+            capture_output=True, text=True, timeout=3
+        )
+        # Parse: "values=0" which is in centibels (0.01 dB)
+        m = re.search(r':\s*values=(\d+)', result.stdout)
+        if m:
+            return int(m.group(1)) / 100.0
+    except Exception as e:
+        logger.error(f"Failed to read TX gain: {e}")
+    return 0.0
+
+def set_tx_gain_db(db: float) -> bool:
+    """Set TX PCM playback volume in dB via ALSA. Range: -102.39 to +4.00."""
+    db = max(-102.39, min(4.0, db))
+    centibels = int(round(db * 100))
+    try:
+        subprocess.run(
+            ["amixer", "-c", str(_CARD_NUM), "set", "PCM", f"{centibels}db"],
+            capture_output=True, text=True, timeout=3
+        )
+        logger.info(f"TX gain set to {db:.1f} dB")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to set TX gain: {e}")
+        return False
 
 
 @asynccontextmanager
@@ -98,6 +135,22 @@ async def get_status():
     return {"state": "connected"}
 
 
+# ─── TX Gain API ───────────────────────────────────────────────────
+
+@app.get("/api/tx-gain")
+async def get_tx_gain(request: Request, _=Depends(admin_required)):
+    db = get_tx_gain_db()
+    return {"gain_db": db}
+
+
+@app.post("/api/tx-gain")
+async def set_tx_gain(request: Request, _=Depends(admin_required)):
+    body = await request.json()
+    db = body.get("gain_db", 0.0)
+    success = set_tx_gain_db(db)
+    return {"success": success, "gain_db": get_tx_gain_db()}
+
+
 # ─── Auth Routes ───────────────────────────────────────────────────
 
 @app.get("/login", response_class=HTMLResponse)
@@ -133,7 +186,11 @@ async def logout(request: Request):
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request, _=Depends(admin_required)):
-    return HTMLResponse(jinja_env.get_template("admin.html").render(request=request, users=USERS, current_user=get_current_user(request)))
+    tx_gain = get_tx_gain_db()
+    return HTMLResponse(jinja_env.get_template("admin.html").render(
+        request=request, users=USERS, current_user=get_current_user(request),
+        tx_gain=tx_gain,
+    ))
 
 
 @app.post("/admin/users")
