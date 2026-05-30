@@ -133,16 +133,15 @@ class RadioConnection:
         self.send_command(Packet.GET_SCREEN, 0x12345678)
 
     def _rssi_poll_loop(self):
-        """Periodically poll BK4819 register 0x67 for RSSI."""
-        log.info("RSSI poll loop started (200ms interval)")
+        """RSSI polling via register 0x67 – DISABLED.
+        We use display-text RSSI instead. Keeping thread as no-op
+        to avoid breaking the start/stop logic."""
+        log.info("RSSI poll loop disabled (using display-text RSSI)")
         while self._running and self.connected:
             try:
-                self.read_register(0x67)
-                time.sleep(self._rssi_interval)
-            except Exception as e:
-                if self._running:
-                    log.error(f"RSSI poll error: {e}")
-                    time.sleep(1)
+                time.sleep(1)
+            except Exception:
+                pass
         log.info("RSSI poll loop stopped")
 
     def _reader_loop(self):
