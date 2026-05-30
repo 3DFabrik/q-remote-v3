@@ -61,6 +61,13 @@ def get_current_user(request: Request) -> Optional[str]:
     return request.session.get("user")
 
 
+
+
+def get_ws_user(websocket) -> Optional[str]:
+    """Get the currently logged-in username from a WebSocket session scope."""
+    session = websocket.scope.get("session", {})
+    return session.get("user")
+
 def is_admin(request: Request) -> bool:
     """Check if the current user is an admin."""
     user = get_current_user(request)
@@ -83,16 +90,15 @@ async def login_required(request: Request):
 
 
 async def admin_required(request: Request):
-    """Redirect to / if not admin, to /login if not authenticated."""
+    """Raise 401 if not authenticated, 403 if not admin."""
     user = get_current_user(request)
     if not user:
-        accept = request.headers.get("accept", "")
-        if "text/html" not in accept:
-            raise HTTPException(status_code=401, detail="Not authenticated")
-        return RedirectResponse(url="/login", status_code=303)
+        raise HTTPException(status_code=401, detail="Not authenticated")
     if not USERS.get(user, {}).get("admin", False):
-        return RedirectResponse(url="/", status_code=303)
+        raise HTTPException(status_code=403, detail="Admin access required")
     return user
+
+
 
 
 # ─── Init ──────────────────────────────────────────────────────────

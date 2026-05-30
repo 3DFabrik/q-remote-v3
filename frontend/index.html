@@ -10,15 +10,30 @@
     <div id="app">
         <!-- Title Plate -->
         <header>
-            <h1>Q-Remote V3</h1>
-            <div class="status-indicator">
-                <div id="status-light" class="status-light"></div>
-                <span id="status">INIT</span>
+            <div class=header-brand>
+                <h1>Q-Remote V3</h1>
+                <div class=status-indicator>
+                    <div id=status-light class=status-light></div>
+                    <span id=status>INIT</span>
+                </div>
             </div>
-            <button id="audio-btn" class="audio-toggle" title="Toggle RX Audio">
-                <span class="audio-icon">🔇</span>
-                <span class="audio-label">AUDIO</span>
-            </button>
+            <div class=header-center>
+                <span id=user-name></span>
+            </div>
+            <div class=header-buttons>
+                <a href=/admin id=admin-btn class=hdr-btn style=display:none>
+                    <span class="hdr-btn-icon audio-icon">&#9881;</span>
+                    <span class=hdr-btn-label>ADMIN</span>
+                </a>
+                <a href=/logout id=logout-btn class=hdr-btn>
+                    <span class="hdr-btn-icon audio-icon">&#x2190;</span>
+                    <span class=hdr-btn-label>LOGOUT</span>
+                </a>
+                <button id=audio-btn class=hdr-btn title=Toggle RX Audio>
+                    <span class="hdr-btn-icon audio-icon">&#x1f507;</span>
+                    <span class="hdr-btn-label audio-label">AUDIO</span>
+                </button>
+            </div>
         </header>
 
         <!-- CRT Display Panel -->
@@ -76,5 +91,16 @@
     </div>
 
     <script type="module" src="/static/js/app.js?v=4.2"></script>
+
+<script>
+(function() {
+    if (window.CURRENT_USER) {
+        document.getElementById("user-name").textContent = CURRENT_USER.name;
+        if (CURRENT_USER.admin) {
+            document.getElementById("admin-btn").style.display = "inline-block";
+        }
+    }
+})();
+</script>
 </body>
 </html>

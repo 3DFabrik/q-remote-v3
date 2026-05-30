@@ -222,3 +222,4 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 *.ulaw-bak
+users.json

@@ -1,6 +1,7 @@
 """Q-Remote V3 – FastAPI Application."""
 
 import asyncio
+import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -9,7 +10,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from jinja2 import Environment, FileSystemLoader
 from starlette.middleware.sessions import SessionMiddleware
 
 from backend.config import load_config, get
@@ -19,7 +20,7 @@ from backend.audio.rx_pipeline import RxPipeline
 from backend.audio.tx_pipeline import TxPipeline
 from backend.auth import (
     SECRET_KEY, USERS, load_users, save_users, log_activity,
-    get_current_user, is_admin, login_required, admin_required,
+    get_current_user, get_ws_user, is_admin, login_required, admin_required,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ TEMPLATES_DIR = FRONTEND_DIR / "templates"
 rx_audio = RxPipeline()
 tx_audio = TxPipeline()
 
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
 
 
 @asynccontextmanager
@@ -65,6 +66,15 @@ app = FastAPI(title="Q-Remote V3", version="3.0.0", lifespan=lifespan)
 # Session middleware for cookie-based auth
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if exc.status_code in (401, 403):
+        return RedirectResponse(url="/login", status_code=303)
+    return HTMLResponse(f"<h1>{exc.status_code}</h1><p>{exc.detail}</p>", status_code=exc.status_code)
+
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
 
@@ -95,7 +105,7 @@ async def login_page(request: Request):
     user = get_current_user(request)
     if user:
         return RedirectResponse(url="/", status_code=303)
-    return templates.TemplateResponse("login.html", {"request": request})
+    return HTMLResponse(jinja_env.get_template("login.html").render(request=request))
 
 
 @app.post("/login")
@@ -108,7 +118,7 @@ async def login_submit(request: Request):
         request.session["user"] = username
         log_activity(username, "LOGIN")
         return RedirectResponse(url="/", status_code=303)
-    return templates.TemplateResponse("login.html", {"request": request, "error": "Ungültige Anmeldedaten"})
+    return HTMLResponse(jinja_env.get_template("login.html").render(request=request, error="Ungültige Anmeldedaten"))
 
 
 @app.get("/logout")
@@ -123,11 +133,7 @@ async def logout(request: Request):
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request, _=Depends(admin_required)):
-    return templates.TemplateResponse("admin.html", {
-        "request": request,
-        "users": USERS,
-        "current_user": get_current_user(request),
-    })
+    return HTMLResponse(jinja_env.get_template("admin.html").render(request=request, users=USERS, current_user=get_current_user(request)))
 
 
 @app.post("/admin/users")
@@ -172,10 +178,7 @@ async def admin_logs(request: Request, _=Depends(admin_required)):
     if log_file.exists():
         lines = log_file.read_text().splitlines()
         entries = list(reversed(lines[-200:]))
-    return templates.TemplateResponse("admin_logs.html", {
-        "request": request,
-        "entries": entries,
-    })
+    return HTMLResponse(jinja_env.get_template("admin_logs.html").render(request=request, entries=entries))
 
 
 @app.get("/admin/logs/download")
@@ -195,6 +198,10 @@ async def serve_index(request: Request):
     if not user:
         return RedirectResponse(url="/login", status_code=303)
     html = (FRONTEND_DIR / "index.html").read_text()
+    is_user_admin = USERS.get(user, {}).get("admin", False)
+    user_json = json.dumps({"name": user, "admin": is_user_admin})
+    inject = f'<script>window.CURRENT_USER = {user_json};</script>'
+    html = html.replace("</head>", inject + "</head>", 1)
     return HTMLResponse(content=html)
 
 
@@ -204,7 +211,7 @@ async def serve_index(request: Request):
 async def audio_rx_ws(websocket: WebSocket):
     """Raw WebSocket for RX audio stream (μ-law bytes)."""
     # Auth check: read session cookie
-    user = get_current_user(websocket.request)
+    user = get_ws_user(websocket)
     if not user:
         await websocket.close(code=4001, reason="Not authenticated")
         return
@@ -228,7 +235,7 @@ async def audio_rx_ws(websocket: WebSocket):
 async def audio_tx_ws(websocket: WebSocket):
     """Raw WebSocket for TX audio stream (browser mic → μ-law → aplay)."""
     # Auth check: read session cookie
-    user = get_current_user(websocket.request)
+    user = get_ws_user(websocket)
     if not user:
         await websocket.close(code=4001, reason="Not authenticated")
         return
