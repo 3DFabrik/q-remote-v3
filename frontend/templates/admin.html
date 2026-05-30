@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -146,9 +146,9 @@
                 <a href="/logout">🚪 Logout</a>
             </div>
 
-            <h2>Benutzer</h2>
+            <h2>Users</h2>
             <table>
-                <tr><th>Callsign</th><th>Passwort</th><th>Admin</th><th>Aktionen</th></tr>
+                <tr><th>Callsign</th><th>Password</th><th>Admin</th><th>Actions</th></tr>
                 {% for username, data in users.items() %}
                 <tr>
                     <form method="POST" action="/admin/users">
@@ -161,7 +161,7 @@
                             <input type="hidden" name="del_username" value="{{ username }}">
                             <button type="submit" class="btn btn-save">SAVE</button>
                             {% if username != current_user %}
-                            <button type="submit" class="btn btn-delete" onclick="this.form.action='/admin/users';this.form.elements.action.value='delete';this.form.elements.del_username.value='{{ username }}';return confirm('{{ username }} wirklich löschen?')">DEL</button>
+                            <button type="submit" class="btn btn-delete" onclick="this.form.action='/admin/users';this.form.elements.action.value='delete';this.form.elements.del_username.value='{{ username }}';return confirm('Delete {{ username }}?')">DEL</button>
                             {% endif %}
                         </td>
                     </form>
@@ -169,13 +169,31 @@
                 {% endfor %}
             </table>
 
-            <h2>Neuer Benutzer</h2>
+            <h2>New User</h2>
             <form method="POST" action="/admin/users" class="add-form">
                 <input type="hidden" name="action" value="add">
                 <input type="text" name="new_username" placeholder="Callsign" required>
-                <input type="password" name="new_password" placeholder="Passwort" required>
+                <input type="password" name="new_password" placeholder="Password" required>
                 <label><input type="checkbox" name="new_admin"> Admin</label>
                 <button type="submit" class="btn btn-add">+ ADD</button>
+            </form>
+            <h2>🎧 RX Squelch (Noise Gate)</h2>
+            <form method="POST" action="/api/squelch" class="add-form" style="flex-wrap:wrap;">
+                <label style="display:flex;align-items:center;gap:6px;">
+                    <input type="checkbox" name="squelch_enabled" {% if squelch_enabled %}checked{% endif %} style="transform:scale(1.3)">
+                    <span style="color:#504840;font-size:0.8rem;">Enabled</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;">
+                    <span style="color:#504840;font-size:0.8rem;">Threshold:</span>
+                    <input type="range" name="squelch_threshold_slider" min="50" max="5000" value="{{ squelch_threshold }}"
+                           oninput="document.getElementById('sq-val').value=this.value"
+                           style="width:150px;accent-color:#ffaa00;">
+                    <input type="number" id="sq-val" name="squelch_threshold" value="{{ squelch_threshold }}" min="50" max="5000"
+                           oninput="document.querySelector('input[name=squelch_threshold_slider]').value=this.value"
+                           style="width:70px;background:var(--bg);border:1px solid var(--panel-border);color:var(--phosphor);padding:5px;border-radius:3px;font-family:'Share Tech Mono',monospace;">
+                    <span style="color:#706858;font-size:0.65rem;">RMS (50 = open, 5000 = tight)</span>
+                </label>
+                <button type="submit" class="btn btn-save">SAVE</button>
             </form>
         </div>
     </div>

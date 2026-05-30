@@ -48,6 +48,13 @@ async def lifespan(app: FastAPI):
         logger.info("Radio connected")
         # Start RX audio pipeline
         rx_audio.start(asyncio.get_event_loop())
+        # Load squelch settings from config
+        try:
+            rx_audio.squelch_enabled = get("audio.squelch_enabled", True)
+            rx_audio.squelch_threshold = get("audio.squelch_threshold", 300)
+            logger.info(f"Squelch: enabled={rx_audio.squelch_enabled}, threshold={rx_audio.squelch_threshold}")
+        except Exception as e:
+            logger.warning(f"Could not load squelch config: {e}")
         tx_audio.start()
     else:
         logger.warning("Radio not available")
@@ -135,6 +142,8 @@ async def logout(request: Request):
 async def admin_page(request: Request, _=Depends(admin_required)):
     return HTMLResponse(jinja_env.get_template("admin.html").render(
         request=request, users=USERS, current_user=get_current_user(request),
+        squelch_enabled=rx_audio.squelch_enabled,
+        squelch_threshold=rx_audio.squelch_threshold,
     ))
 
 
@@ -256,6 +265,38 @@ async def audio_tx_ws(websocket: WebSocket):
     finally:
         await tx_audio.remove_client(websocket)
         logger.info("TX audio WebSocket client disconnected")
+
+
+# ─── Squelch Settings API ──────────────────────────────────────────
+
+@app.get("/api/squelch")
+async def get_squelch(request: Request, _=Depends(admin_required)):
+    return {
+        "enabled": rx_audio.squelch_enabled,
+        "threshold": rx_audio.squelch_threshold,
+    }
+
+
+@app.post("/api/squelch")
+async def set_squelch(request: Request, _=Depends(admin_required)):
+    from backend.config import load_config, get
+    form = await request.form()
+    enabled = form.get("squelch_enabled") == "on"
+    threshold = int(form.get("squelch_threshold", "300"))
+    threshold = max(10, min(10000, threshold))
+    rx_audio.squelch_enabled = enabled
+    rx_audio.squelch_threshold = threshold
+    # Persist to config
+    cfg_path = Path(__file__).parent.parent / "config.local.yaml"
+    import yaml
+    cfg = {}
+    if cfg_path.exists():
+        cfg = yaml.safe_load(cfg_path.read_text()) or {}
+    cfg.setdefault("audio", {})["squelch_enabled"] = enabled
+    cfg["audio"]["squelch_threshold"] = threshold
+    cfg_path.write_text(yaml.dump(cfg, default_flow_style=False))
+    log_activity(get_current_user(request), "SQUELCH", f"enabled={enabled} threshold={threshold}")
+    return RedirectResponse(url="/admin", status_code=303)
 
 
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")

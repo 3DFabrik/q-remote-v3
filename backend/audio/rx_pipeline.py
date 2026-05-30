@@ -7,6 +7,7 @@ No audioop dependency - uses builtin ulaw table.
 
 import asyncio
 import logging
+import math
 import struct
 import subprocess
 import threading
@@ -74,6 +75,12 @@ class RxPipeline:
         self._thread = None
         self._clients: Set = set()
         self._loop = None
+        # Noise gate (squelch)
+        self.squelch_enabled = True
+        self.squelch_threshold = 300  # RMS threshold (0-32768), ~-40dB
+        self._gate_open = False
+        self._gate_hold_frames = 0
+        self._GATE_HOLD = 10  # keep gate open for 10 frames (200ms) after signal drops
 
     def add_client(self, websocket):
         self._clients.add(websocket)
@@ -151,6 +158,22 @@ class RxPipeline:
 
                 ulaw_data = pcm_to_ulaw(pcm_data)
                 chunk_count += 1
+
+                # Noise gate: compute RMS of PCM chunk
+                if self.squelch_enabled:
+                    import array
+                    samples = array.array("h", pcm_data)
+                    rms = math.sqrt(sum(s * s for s in samples) / len(samples))
+                    if rms > self.squelch_threshold:
+                        self._gate_open = True
+                        self._gate_hold_frames = self._GATE_HOLD
+                    elif self._gate_hold_frames > 0:
+                        self._gate_hold_frames -= 1
+                    else:
+                        self._gate_open = False
+
+                    if not self._gate_open:
+                        continue  # Drop silent/noise chunk
 
                 if self._clients and self._loop:
                     self._loop.call_soon_threadsafe(
