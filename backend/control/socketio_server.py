@@ -3,6 +3,7 @@ Uses V1's LCDDisplay to process type 5/6 packets into display fragments.
 """
 
 import asyncio
+import time
 import logging
 from typing import Optional
 from http.cookies import SimpleCookie
@@ -27,6 +28,8 @@ sio = socketio.AsyncServer(
 radio: Optional[RadioConnection] = None
 lcd: Optional[LCDDisplay] = None
 _ptt_owner: Optional[str] = None
+_ptt_drain_task: Optional[asyncio.Task] = None
+_PTT_DRAIN_DELAY = 0.8   # seconds to wait before releasing PTT
 
 # RSSI smoothing state: running average of raw register values
 _rssi_raw_history = []
@@ -209,9 +212,13 @@ async def key_press(sid, data):
 
 @sio.event
 async def ptt_on(sid, data=None):
-    global _ptt_owner
+    global _ptt_owner, _ptt_drain_task
     if not radio or not radio.connected:
         return
+    # Cancel any pending drain if re-pressing quickly
+    if _ptt_drain_task and not _ptt_drain_task.done():
+        _ptt_drain_task.cancel()
+        _ptt_drain_task = None
     if _ptt_owner is not None and _ptt_owner != sid:
         await sio.emit('ptt_status', {'active': False, 'error': 'PTT locked'}, to=sid)
         return
@@ -226,17 +233,33 @@ async def ptt_on(sid, data=None):
 
 @sio.event
 async def ptt_off(sid, data=None):
-    global _ptt_owner
+    """PTT released – wait for audio buffer, then release."""
+    global _ptt_owner, _ptt_drain_task
     if _ptt_owner != sid:
         return
-    if radio:
-        radio.send_key(13)
-    _ptt_owner = None
-    await sio.emit('ptt_status', {'active': False, 'holder': None})
-    # Force display refresh after radio has time to respond
-    if lcd:
-        await asyncio.sleep(0.15)
-        lcd.force_flush()
+    _ptt_drain_task = asyncio.create_task(_drain_and_release(sid))
+    logger.info(f"PTT UP – drain started (sid={sid})")
+
+
+async def _drain_and_release(sid):
+    """Fixed delay before releasing PTT to let aplay buffer drain."""
+    global _ptt_owner, _ptt_drain_task
+    try:
+        await asyncio.sleep(_PTT_DRAIN_DELAY)
+        logger.info("PTT drain complete, releasing")
+    except asyncio.CancelledError:
+        logger.info("PTT drain cancelled (re-pressed)")
+        return
+    finally:
+        _ptt_drain_task = None
+    if _ptt_owner == sid:
+        if radio:
+            radio.send_key(13)
+        _ptt_owner = None
+        await sio.emit('ptt_status', {'active': False, 'holder': None})
+        if lcd:
+            await asyncio.sleep(0.15)
+            lcd.force_flush()
 
 
 @sio.event

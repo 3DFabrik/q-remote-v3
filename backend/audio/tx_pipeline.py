@@ -9,6 +9,7 @@ import logging
 import subprocess
 import threading
 import struct
+import time
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ class TxPipeline:
         self._clients = set()
         self._loop = None
         self.is_transmitting = False
+        self._last_chunk_time = 0.0
 
     def start(self):
         self._loop = asyncio.get_event_loop()
