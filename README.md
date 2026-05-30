@@ -8,6 +8,10 @@ Web-based remote control for Quansheng UV-K5 ham radio. Access your radio from a
 
 ![Login Panel](docs/screenshot-login.jpg)
 
+*TX mode with MOD meter (mic level in dBFS):*
+
+![TX MOD Meter](docs/screenshot-tx-mod.jpg)
+
 ## Features
 
 ### ✅ Working
