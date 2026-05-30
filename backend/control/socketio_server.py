@@ -88,25 +88,27 @@ def init_radio():
             lcd.check_rssi_timeout()
             # Emit RSSI (including s_raw=0 when timed out)
             if lcd.rssi == -120:
-                await sio.emit('rssi', {'dbm': -120, 's_unit': 'S0', 's_raw': 0})
+                await sio.emit('rssi', {'dbm': -120})
             else:
-                s_table = [
-                    (-140, "S0", 0), (-121, "S1", 1), (-115, "S2", 2),
-                    (-109, "S3", 3), (-103, "S4", 4), (-97, "S5", 5),
-                    (-91, "S6", 6), (-85, "S7", 7), (-79, "S8", 8),
-                    (-73, "S9", 9),
-                    (-63, "S9+10", 10), (-53, "S9+20", 11),
-                    (-43, "S9+30", 12), (-33, "S9+40", 13),
-                    (-23, "S9+50", 14), (-13, "S9+60", 15),
-                ]
-                s_unit = "S9+60"
-                s_raw = 15
-                for threshold, label, raw in s_table:
-                    if lcd.rssi <= threshold:
-                        s_unit = label
-                        s_raw = raw
-                        break
-                await sio.emit('rssi', {'dbm': lcd.rssi, 's_unit': s_unit, 's_raw': s_raw})
+                # Send raw dBm – frontend does continuous S-unit mapping
+                dbm = lcd.rssi
+                # Determine s_unit label for text display
+                if dbm <= -121: s_unit = "S0"
+                elif dbm <= -115: s_unit = "S1"
+                elif dbm <= -109: s_unit = "S2"
+                elif dbm <= -103: s_unit = "S3"
+                elif dbm <= -97: s_unit = "S4"
+                elif dbm <= -91: s_unit = "S5"
+                elif dbm <= -85: s_unit = "S6"
+                elif dbm <= -79: s_unit = "S7"
+                elif dbm <= -73: s_unit = "S8"
+                elif dbm <= -63: s_unit = "S9"
+                elif dbm <= -53: s_unit = "S9+20"
+                elif dbm <= -43: s_unit = "S9+30"
+                elif dbm <= -33: s_unit = "S9+40"
+                elif dbm <= -23: s_unit = "S9+50"
+                else: s_unit = "S9+60"
+                await sio.emit('rssi', {'dbm': dbm, 's_unit': s_unit})
 
     radio.on_ui = handle_ui
     radio.on_rssi = _on_rssi

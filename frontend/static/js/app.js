@@ -16,7 +16,6 @@ const state = {
 const statusEl = document.getElementById("status");
 const statusLight = document.getElementById("status-light");
 const pttBtn = document.getElementById("ptt-btn");
-const smeterValue = document.getElementById("smeter-value");
 const smeterCanvas = document.getElementById("smeter-canvas");
 const lcdCanvas = document.getElementById("lcd");
 
@@ -69,9 +68,22 @@ async function init() {
         }, 50);
     };
 
+    // Continuous dBm → s_raw mapping: 6dB per S-unit (S1=-121, S9=-73)
+    // s_raw: 0=S0, 1=S1, ..., 9=S9, 10=S9+10, ..., 15=S9+60
+    function dbmToSraw(dbm) {
+        if (dbm <= -121) return 0;
+        if (dbm >= -13) return 15;
+        // S1 (-121) to S9 (-73): 8 steps over 48dB = 6dB per S-unit
+        if (dbm <= -73) {
+            return 1 + (dbm - (-121)) / 6;
+        }
+        // Over S9: -73 to -13 = 60dB over 6 steps = 10dB per step
+        return 9 + (-73 - dbm) / (-10);  // Each 10dB = 1 step
+    }
+
     control.onRssiUpdate = (dbm, sUnit, sRaw) => {
-        smeterValue.textContent = sUnit;
-        smeter.updateRX(sRaw);
+        const continuousSraw = dbmToSraw(dbm);
+        smeter.updateRX(continuousSraw);
     };
 
     control.onPttStatus = (active, holder, error) => {
