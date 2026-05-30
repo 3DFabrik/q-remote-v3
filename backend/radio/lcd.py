@@ -213,3 +213,4 @@ class LCDDisplay:
     def clear(self):
         self.fragments = {i: [] for i in range(LCD_LINES)}
         self.smeter = 0
+

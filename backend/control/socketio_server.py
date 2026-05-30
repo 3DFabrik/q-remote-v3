@@ -14,7 +14,7 @@ import socketio
 from backend.radio.connection import RadioConnection
 from backend.radio.protocol import Packet
 from backend.radio.lcd import LCDDisplay
-from backend.auth import USERS, SECRET_KEY
+from backend.auth import USERS, SECRET_KEY, log_activity
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,7 @@ sio = socketio.AsyncServer(
 radio: Optional[RadioConnection] = None
 lcd: Optional[LCDDisplay] = None
 _ptt_owner: Optional[str] = None
+_sid_users: dict = {}  # sid -> username
 _ptt_drain_task: Optional[asyncio.Task] = None
 _PTT_DRAIN_DELAY = 0.8   # seconds to wait before releasing PTT
 
@@ -179,6 +180,7 @@ async def connect(sid, environ):
     logger.info(f"Client connected: {sid} (user={user})")
     # Store user on sid for later use
     await sio.save_session(sid, {'user': user})
+    _sid_users[sid] = user
     if radio and radio.connected:
         await sio.emit('radio_state', {'state': 'connected'}, to=sid)
         # Send current LCD state immediately
@@ -192,6 +194,7 @@ async def connect(sid, environ):
 async def disconnect(sid):
     global _ptt_owner
     logger.info(f"Client disconnected: {sid}")
+    _sid_users.pop(sid, None)
     if _ptt_owner == sid:
         if radio:
             radio.send_key(13)
@@ -224,6 +227,10 @@ async def ptt_on(sid, data=None):
         return
     _ptt_owner = sid
     radio.send_key(16)
+    await asyncio.sleep(0.1)  # Wait for PLL to settle on TX freq
+    freq = await radio.read_frequency() or 'N/A'
+    user = _sid_users.get(sid, 'unknown')
+    log_activity(user, 'PTT_ON', f'freq={freq}')
     await sio.emit('ptt_status', {'active': True, 'holder': sid})
     # Force display refresh after radio has time to respond
     if lcd:

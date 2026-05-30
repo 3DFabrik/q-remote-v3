@@ -45,6 +45,11 @@ class RadioConnection:
         # RSSI polling
         self._rssi_thread = None
         self._rssi_interval = 0.2  # 200ms
+        # Frequency read-on-demand (no continuous polling)
+        self._freq_reg38 = None
+        self._freq_reg39 = None
+        self._freq_future = None
+        self._freq_seq = 0
 
     def connect(self):
         try:
@@ -133,16 +138,37 @@ class RadioConnection:
         self.send_command(Packet.GET_SCREEN, 0x12345678)
 
     def _rssi_poll_loop(self):
-        """RSSI polling via register 0x67 – DISABLED.
-        We use display-text RSSI instead. Keeping thread as no-op
-        to avoid breaking the start/stop logic."""
-        log.info("RSSI poll loop disabled (using display-text RSSI)")
+        """No-op placeholder – frequency is read on demand via read_frequency()."""
+        log.info("RSSI poll loop idle (no continuous polling)")
         while self._running and self.connected:
             try:
                 time.sleep(1)
             except Exception:
                 pass
         log.info("RSSI poll loop stopped")
+
+    async def read_frequency(self, timeout_s: float = 0.5):
+        """Read TX frequency from BK4819 regs 0x38+0x39 on demand.
+        Reads registers sequentially, matching by sequence number.
+        Returns frequency string e.g. '144.76250' or None on timeout."""
+        if not self.connected:
+            return None
+        self._freq_seq += 1
+        seq = self._freq_seq
+        self._freq_reg38 = None
+        self._freq_reg39 = None
+        self._freq_future = asyncio.get_event_loop().create_future()
+        self._freq_future_seq = seq
+        self.read_register(0x38)
+        await asyncio.sleep(0.05)
+        self.read_register(0x39)
+        try:
+            return await asyncio.wait_for(self._freq_future, timeout=timeout_s)
+        except asyncio.TimeoutError:
+            if self._freq_future_seq == seq:
+                log.warning("read_frequency() timed out after %.1fs", timeout_s)
+                self._freq_future = None
+            return None
 
     def _reader_loop(self):
         while self._running:
@@ -181,7 +207,21 @@ class RadioConnection:
                 reg = data[4] | (data[5] << 8)
                 val = data[6] | (data[7] << 8)
                 log.info(f"Register parsed: reg=0x{reg:04X} val=0x{val:04X} (paramLen={param_len})")
-                self._safe_emit('on_register', reg, val)
+                # Collect BK4819 regs 0x38+0x39 for frequency read
+                # Only accept registers when we have an active future
+                if reg == 0x38 and self._freq_future and not self._freq_future.done():
+                    self._freq_reg38 = val
+                elif reg == 0x39 and self._freq_future and not self._freq_future.done():
+                    self._freq_reg39 = val
+                if self._freq_reg38 is not None and self._freq_reg39 is not None:
+                    raw = (self._freq_reg39 << 16) | self._freq_reg38
+                    freq_hz = raw * 10
+                    mhz = f"{freq_hz / 1e6:.5f}" if freq_hz > 0 else None
+                    log.info(f"Freq from regs: {mhz} MHz (raw=0x{raw:08X})")
+                    if self._freq_future and not self._freq_future.done():
+                        self._freq_future.set_result(mhz)
+                    self._freq_reg38 = None
+                    self._freq_reg39 = None
         elif cmd == Packet.IM_HERE:
             log.debug("Radio acknowledged heartbeat")
         else:
