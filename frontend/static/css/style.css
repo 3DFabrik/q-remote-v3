@@ -322,7 +322,7 @@ header {
     background: linear-gradient(180deg, #666 0%, #444 40%, #333 100%);
     border: 1px solid #222;
     border-radius: 4px;
-    padding: 6px 8px;
+    padding: 8px;
     cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
@@ -336,21 +336,29 @@ header {
     position: relative;
     min-width: 44px;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    gap: 2px;
+    justify-content: space-between;
 }
 
 .radio-btn .btn-label {
-    font-size: 1rem;
+    font-size: 0.95rem;
     line-height: 1;
+    text-align: left;
 }
 
 .radio-btn .btn-sub {
-    font-size: 0.5rem;
+    font-size: 0.95rem;
     color: var(--amber);
-    opacity: 0.7;
+    opacity: 0.8;
     letter-spacing: 0.5px;
+    text-align: right;
+}
+
+/* Buttons without sub-label: center the main label */
+.radio-btn.nav-key,
+.radio-btn.arrow-key {
+    justify-content: center;
 }
 
 .radio-btn:active {
@@ -375,11 +383,7 @@ header {
     color: #ff6644;
 }
 
-/* Arrow keys – larger */
-.radio-btn.arrow-key {
-    font-size: 1.1rem;
-    padding: 8px 16px;
-}
+/* Arrow keys – same size as others */
 
 /* F button – blue accent */
 .radio-btn.btn-f {
