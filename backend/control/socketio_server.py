@@ -203,6 +203,10 @@ async def key_press(sid, data):
     keycode = data.get('keycode', 0)
     if radio and radio.connected:
         radio.send_key(keycode)
+        # Force display refresh after radio has time to respond
+        if lcd:
+            await asyncio.sleep(0.15)
+            lcd.force_flush()
 
 
 @sio.event
@@ -216,6 +220,10 @@ async def ptt_on(sid, data=None):
     _ptt_owner = sid
     radio.send_key(16)
     await sio.emit('ptt_status', {'active': True, 'holder': sid})
+    # Force display refresh after radio has time to respond
+    if lcd:
+        await asyncio.sleep(0.15)
+        lcd.force_flush()
 
 
 @sio.event
@@ -227,6 +235,10 @@ async def ptt_off(sid, data=None):
         radio.send_key(13)
     _ptt_owner = None
     await sio.emit('ptt_status', {'active': False, 'holder': None})
+    # Force display refresh after radio has time to respond
+    if lcd:
+        await asyncio.sleep(0.15)
+        lcd.force_flush()
 
 
 @sio.event
