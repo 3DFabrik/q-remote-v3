@@ -33,6 +33,15 @@ class LCDDisplay:
         if now - self._last_push < 0.1:
             return
         self._last_push = now
+        state = self.get_state()
+        if self._last_state is not None and state == self._last_state:
+            return
+        self._last_state = state
+        for cb in self._change_callbacks:
+            try:
+                cb(state)
+            except Exception as e:
+                log.error(f"LCD callback error: {e}")
 
     def force_flush(self):
         """Force push current state to clients, ignoring throttle."""
