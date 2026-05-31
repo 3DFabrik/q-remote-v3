@@ -99,7 +99,18 @@ async def _eeprom_read_task(task_id: str):
         radio.exit_eeprom_mode()
 
     # Parse all regions
+    import hashlib
     channels = parse_eeprom(bytes(data_buf), bytes(name_buf), bytes(attr_buf))
+    
+    # Debug: dump first 8 channels raw data
+    logger.info(f"EEPROM read complete: data={len(data_buf)} attr={len(attr_buf)} names={len(name_buf)}")
+    for i in range(8):
+        d = data_buf[i*16:(i+1)*16]
+        n = name_buf[i*16:(i+1)*16]
+        a = attr_buf[i] if i < len(attr_buf) else -1
+        c = channels[i] if i < len(channels) else {}
+        logger.info(f"  Ch{i}: data={bytes(d).hex()} name={bytes(n).hex()} attr={a} inUse={c.get("inUse")} freq={c.get("rxFreq")} name_str={c.get("name")}")
+    
     _set_channels(channels)
 
     _tasks[task_id]["status"] = "completed"

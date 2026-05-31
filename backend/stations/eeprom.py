@@ -133,8 +133,10 @@ def parse_channel(channel_num: int, data: bytes, name: bytes, attr_byte: int) ->
     bandwidth = BANDWIDTH_MAP.get((miscByte >> 3) & 0x01, "Wide")
     power = POWER_MAP.get((miscByte >> 4) & 0x03, "High")
 
-    inUse = (attr_byte <= 6 and attr_byte > 0 and rxFreq > 0)
-    band = attr_byte if attr_byte <= 6 else 0
+    # Channel is in use if it has a valid RX frequency
+    # (attr_byte is NOT the band value - band is derived from frequency)
+    inUse = rxFreq > 0
+    band = attr_byte
 
     return {
         "number": channel_num,
