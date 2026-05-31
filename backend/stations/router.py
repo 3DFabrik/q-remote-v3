@@ -60,18 +60,21 @@ async def _eeprom_read_task(task_id: str):
 
     regions = get_read_regions()
     total_chunks = len(regions)
-    data_buf = bytearray(DATA_SIZE)
-    attr_buf = bytearray(ATTR_SIZE)
-    name_buf = bytearray(NAMES_SIZE)
-
     _tasks[task_id]["total"] = total_chunks
 
-    for idx, (offset, length) in enumerate(regions):
-        if _tasks[task_id]["status"] == "cancelled":
-            return
+    try:
+        # Switch to EEPROM mode (pauses Remote UI)
+        radio.enter_eeprom_mode()
 
-        try:
-            response = await _send_eeprom_read(radio, offset, length, timeout=3.0)
+        data_buf = bytearray(DATA_SIZE)
+        attr_buf = bytearray(ATTR_SIZE)
+        name_buf = bytearray(NAMES_SIZE)
+
+        for idx, (offset, length) in enumerate(regions):
+            if _tasks[task_id]["status"] == "cancelled":
+                return
+
+            response = radio.eeprom_read_chunk(offset, length, timeout=3.0)
 
             if response is None:
                 _tasks[task_id]["status"] = "error"
@@ -79,24 +82,21 @@ async def _eeprom_read_task(task_id: str):
                 return
 
             # Route response to correct buffer
-            if offset < ATTR_SIZE:  # Data region (0x0000–0x0C7F)
-                start = offset
-                data_buf[start:start + length] = response[:length]
-            elif offset >= 0x0D60 and offset < 0x0D60 + ATTR_SIZE:  # Attr region
+            if offset < 0x0D60:  # Data region
+                data_buf[offset:offset + length] = response[:length]
+            elif offset < 0x0F50:  # Attr region
                 start = offset - 0x0D60
                 attr_buf[start:start + length] = response[:length]
-            elif offset >= 0x0F50:  # Names region
+            else:  # Names region
                 start = offset - 0x0F50
                 name_buf[start:start + length] = response[:length]
 
             _tasks[task_id]["progress"] = idx + 1
-            await asyncio.sleep(0.05)  # Let radio breathe
+            await asyncio.sleep(0.02)
 
-        except Exception as e:
-            logger.error(f"EEPROM read error at offset 0x{offset:04X}: {e}")
-            _tasks[task_id]["status"] = "error"
-            _tasks[task_id]["error"] = str(e)
-            return
+    finally:
+        # Always restore Remote UI mode
+        radio.exit_eeprom_mode()
 
     # Parse all regions
     channels = parse_eeprom(bytes(data_buf), bytes(name_buf), bytes(attr_buf))
@@ -104,73 +104,6 @@ async def _eeprom_read_task(task_id: str):
 
     _tasks[task_id]["status"] = "completed"
     _tasks[task_id]["result"] = {"channels": len([c for c in channels if c["inUse"]])}
-
-
-async def _send_eeprom_read(radio, offset: int, size: int, timeout: float = 3.0) -> Optional[bytes]:
-    """Send READ_EEPROM command and wait for the reply via serial.
-    
-    Packet format (matching original C# / V1 code):
-      Send: READ_EEPROM, u16(offset), 0(int), size(int), timestamp(int)
-      Reply: [cmd:2][paramLen:2][offset:2][size:1][flag:1][data...]
-    """
-    from backend.radio.protocol import Packet, u16
-
-    future = asyncio.get_event_loop().create_future()
-    original_on_command = radio._on_command
-
-    def intercepted_on_command(data):
-        if len(data) >= 2:
-            cmd = data[0] | (data[1] << 8)
-            if cmd == Packet.READ_EEPROM_REPLY and len(data) >= 9:
-                resp_offset = data[4] | (data[5] << 8)
-                resp_size = data[6]
-                if resp_offset == offset and not future.done():
-                    eeprom_data = bytes(data[8:8 + resp_size])
-                    future.set_result(eeprom_data)
-        original_on_command(data)
-
-    radio._on_command = intercepted_on_command
-    try:
-        # Match V1 format: send_command(READ_EEPROM, u16(offset), 0, size, 0x12345678)
-        radio.send_command(Packet.READ_EEPROM, u16(offset), 0, size, 0x12345678)
-        return await asyncio.wait_for(future, timeout=timeout)
-    except asyncio.TimeoutError:
-        logger.warning(f"EEPROM read timeout at offset 0x{offset:04X}")
-        return None
-    finally:
-        radio._on_command = original_on_command
-
-
-async def _send_eeprom_write(radio, offset: int, data: bytes, timeout: float = 3.0) -> bool:
-    """Send WRITE_EEPROM command and wait for the reply.
-    
-    Packet format (matching V1):
-      Send: WRITE_EEPROM, u16(offset), True(int), 0x12345678(int), data(bytes)
-      Reply: [cmd:2][paramLen:2][offset:2]
-    """
-    from backend.radio.protocol import Packet, u16
-
-    future = asyncio.get_event_loop().create_future()
-    original_on_command = radio._on_command
-
-    def intercepted_on_command(raw_data):
-        if len(raw_data) >= 2:
-            cmd = raw_data[0] | (raw_data[1] << 8)
-            if cmd == Packet.WRITE_EEPROM_REPLY and len(raw_data) >= 6:
-                resp_offset = raw_data[4] | (raw_data[5] << 8)
-                if resp_offset == offset and not future.done():
-                    future.set_result(True)
-        original_on_command(raw_data)
-
-    radio._on_command = intercepted_on_command
-    try:
-        radio.send_command(Packet.WRITE_EEPROM, u16(offset), 1, 0x12345678, data)
-        return await asyncio.wait_for(future, timeout=timeout)
-    except asyncio.TimeoutError:
-        logger.warning(f"EEPROM write timeout at offset 0x{offset:04X}")
-        return False
-    finally:
-        radio._on_command = original_on_command
 
 
 async def _eeprom_write_task(task_id: str, data: bytes, names: bytes, attrs: bytes):
@@ -189,26 +122,29 @@ async def _eeprom_write_task(task_id: str, data: bytes, names: bytes, attrs: byt
     total_chunks = len(regions)
     _tasks[task_id]["total"] = total_chunks
 
-    from backend.radio.protocol import Packet, build_packet, u16
+    try:
+        radio.enter_eeprom_mode()
 
-    for idx, (offset, chunk) in enumerate(regions):
-        if _tasks[task_id]["status"] == "cancelled":
-            return
+        for idx, (offset, chunk) in enumerate(regions):
+            if _tasks[task_id]["status"] == "cancelled":
+                return
 
-        try:
-            success = await _send_eeprom_write(radio, offset, chunk, timeout=3.0)
+            success = radio.eeprom_write_chunk(offset, chunk, timeout=3.0)
             if not success:
                 _tasks[task_id]["status"] = "error"
                 _tasks[task_id]["error"] = f"Write failed at offset 0x{offset:04X}"
                 return
-            await asyncio.sleep(0.05)
 
             _tasks[task_id]["progress"] = idx + 1
-        except Exception as e:
-            logger.error(f"EEPROM write error at offset 0x{offset:04X}: {e}")
-            _tasks[task_id]["status"] = "error"
-            _tasks[task_id]["error"] = str(e)
-            return
+            await asyncio.sleep(0.05)
+
+    except Exception as e:
+        logger.error(f"EEPROM write error: {e}")
+        _tasks[task_id]["status"] = "error"
+        _tasks[task_id]["error"] = str(e)
+        return
+    finally:
+        radio.exit_eeprom_mode()
 
     _tasks[task_id]["status"] = "completed"
     _tasks[task_id]["result"] = {"backup_id": backup_id}

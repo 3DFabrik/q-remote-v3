@@ -50,6 +50,7 @@ class RadioConnection:
         self._freq_reg39 = None
         self._freq_future = None
         self._freq_seq = 0
+        self._eeprom_mode = False
 
     def connect(self):
         try:
@@ -97,6 +98,137 @@ class RadioConnection:
             log.error(f"Failed to connect to radio: {e}")
             self.connected = False
             return False
+
+    def enter_eeprom_mode(self):
+        """Pause Remote UI and switch to raw serial for EEPROM access.
+        Stops the reader thread and reopens port without Hello."""
+        import time as _time
+        # Stop reader thread
+        self._running = False
+        if self._reader_thread and self._reader_thread.is_alive():
+            self._reader_thread.join(timeout=2.0)
+        # Close and reopen port without Hello/init
+        try:
+            if self.port and self.port.is_open:
+                self.port.close()
+        except Exception:
+            pass
+        _time.sleep(0.1)
+        self.port = serial.Serial(
+            port=self.port_name, baudrate=SERIAL_BAUD,
+            parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
+            bytesize=serial.EIGHTBITS, timeout=1.0, write_timeout=10,
+        )
+        # Drain any pending data
+        _time.sleep(0.05)
+        try:
+            self.port.read(4096)
+        except Exception:
+            pass
+        self._eeprom_mode = True
+
+    def exit_eeprom_mode(self):
+        """Restore Remote UI mode after EEPROM access.
+        Reconnects with Hello sequence and restarts reader thread."""
+        import time as _time
+        self._eeprom_mode = False
+        # Close and do full reconnect
+        try:
+            if self.port and self.port.is_open:
+                self.port.close()
+        except Exception:
+            pass
+        _time.sleep(0.1)
+        # Reconnect with full init (same as connect())
+        self.port = serial.Serial(
+            port=self.port_name, baudrate=SERIAL_BAUD,
+            parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
+            bytesize=serial.EIGHTBITS, timeout=SERIAL_TIMEOUT, write_timeout=10,
+        )
+        _time.sleep(0.05)
+        try:
+            self.port.write(b"\x00")
+            _time.sleep(0.1)
+            self.port.read(4096)
+        except Exception:
+            pass
+        # Restart reader thread
+        self._running = True
+        self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
+        self._reader_thread.start()
+        _time.sleep(0.05)
+        # Re-activate Remote UI
+        self.send_hello()
+        _time.sleep(0.5)
+        self.send_key(10)  # MENU
+        _time.sleep(0.1)
+        self.send_key(13)  # EXIT
+        _time.sleep(0.2)
+
+    def eeprom_read_chunk(self, offset: int, size: int = 128, timeout: float = 3.0):
+        """Read a single EEPROM chunk in raw mode. Must be in eeprom_mode.
+        Returns bytes or None on timeout."""
+        from backend.radio.protocol import Packet, build_packet, u16, PacketParser
+        import time as _time
+
+        pkt = build_packet(Packet.READ_EEPROM, u16(offset), u16(size), 0x12345678)
+        self.port.write(pkt)
+        self.port.flush()
+
+        # Collect raw bytes and parse
+        buf = bytearray()
+        deadline = _time.time() + timeout
+        while _time.time() < deadline:
+            chunk = self.port.read(256)
+            if chunk:
+                buf.extend(chunk)
+            # Try to parse for our reply
+            result = [None]
+            def on_cmd(data):
+                if len(data) >= 2:
+                    cmd = data[0] | (data[1] << 8)
+                    if cmd == Packet.READ_EEPROM_REPLY and len(data) >= 9:
+                        resp_offset = data[4] | (data[5] << 8)
+                        resp_size = data[6]
+                        if resp_offset == offset:
+                            result[0] = bytes(data[8:8 + resp_size])
+            parser = PacketParser()
+            parser.feed(bytes(buf), on_command=on_cmd, on_ui=lambda *a: None)
+            if result[0] is not None:
+                return result[0]
+
+        return None  # Timeout
+
+    def eeprom_write_chunk(self, offset: int, data: bytes, timeout: float = 3.0):
+        """Write a single EEPROM chunk in raw mode. Must be in eeprom_mode.
+        Returns True on success, False on timeout."""
+        from backend.radio.protocol import Packet, build_packet, u16, PacketParser
+        import time as _time
+
+        pkt = build_packet(Packet.WRITE_EEPROM, u16(offset), 1, 0x12345678, data)
+        self.port.write(pkt)
+        self.port.flush()
+
+        buf = bytearray()
+        deadline = _time.time() + timeout
+        while _time.time() < deadline:
+            chunk = self.port.read(256)
+            if chunk:
+                buf.extend(chunk)
+            result = [False]
+            def on_cmd(raw_data):
+                if len(raw_data) >= 2:
+                    cmd = raw_data[0] | (raw_data[1] << 8)
+                    if cmd == Packet.WRITE_EEPROM_REPLY and len(raw_data) >= 6:
+                        resp_offset = raw_data[4] | (raw_data[5] << 8)
+                        if resp_offset == offset:
+                            result[0] = True
+            parser = PacketParser()
+            parser.feed(bytes(buf), on_command=on_cmd, on_ui=lambda *a: None)
+            if result[0]:
+                return True
+
+        return False  # Timeout
 
     def disconnect(self):
         self._running = False
