@@ -71,11 +71,7 @@ async def _eeprom_read_task(task_id: str):
             return
 
         try:
-            # Build and send READ_EEPROM packet
-            from backend.radio.protocol import Packet, build_packet, u16
-
-            pkt = build_packet(Packet.READ_EEPROM, u16(length), offset)
-            response = await _send_and_wait_eeprom(radio, pkt, offset, length, timeout=2.0)
+            response = await _send_eeprom_read(radio, offset, length, timeout=3.0)
 
             if response is None:
                 _tasks[task_id]["status"] = "error"
@@ -110,63 +106,71 @@ async def _eeprom_read_task(task_id: str):
     _tasks[task_id]["result"] = {"channels": len([c for c in channels if c["inUse"]])}
 
 
-async def _send_and_wait_eeprom(radio, pkt, offset: int, length: int, timeout: float = 2.0) -> Optional[bytes]:
-    """Send an EEPROM packet and wait for the reply via serial."""
-    import struct
-    from backend.radio.protocol import Packet
+async def _send_eeprom_read(radio, offset: int, size: int, timeout: float = 3.0) -> Optional[bytes]:
+    """Send READ_EEPROM command and wait for the reply via serial.
+    
+    Packet format (matching original C# / V1 code):
+      Send: READ_EEPROM, u16(offset), 0(int), size(int), timestamp(int)
+      Reply: [cmd:2][paramLen:2][offset:2][size:1][flag:1][data...]
+    """
+    from backend.radio.protocol import Packet, u16
 
     future = asyncio.get_event_loop().create_future()
-
-    def _on_command(data: bytes):
-        if len(data) < 2:
-            return
-        cmd = data[0] | (data[1] << 8)
-        if cmd == Packet.READ_EEPROM_REPLY:
-            # Response format: [cmd:2][paramLen:2][offset:2][data...]
-            if len(data) >= 6:
-                resp_offset = data[4] | (data[5] << 8)
-                if resp_offset == offset and not future.done():
-                    payload = bytes(data[6:])
-                    future.set_result(payload)
-
-    # Temporarily hook into the parser
-    original_handler = radio.parser.feed
-    received = False
-
-    def patched_feed(raw_bytes, on_command=None, on_ui=None):
-        # Process normally first
-        original_handler(raw_bytes, on_command, on_ui)
-        # Also check for EEPROM replies in raw data
-        for b in raw_bytes:
-            pass  # The normal parser will call on_command
-
-    # We need to intercept commands at a higher level
-    old_on_command = None
-
-    # Monkey-patch the on_command handler temporarily
-    original_reader_on_command = radio._on_command
+    original_on_command = radio._on_command
 
     def intercepted_on_command(data):
-        cmd = data[0] | (data[1] << 8) if len(data) >= 2 else 0
-        if cmd == Packet.READ_EEPROM_REPLY:
-            if len(data) >= 6:
+        if len(data) >= 2:
+            cmd = data[0] | (data[1] << 8)
+            if cmd == Packet.READ_EEPROM_REPLY and len(data) >= 9:
                 resp_offset = data[4] | (data[5] << 8)
+                resp_size = data[6]
                 if resp_offset == offset and not future.done():
-                    payload = bytes(data[6:])
-                    future.set_result(payload)
-        # Also call original handler
-        original_reader_on_command(data)
+                    eeprom_data = bytes(data[8:8 + resp_size])
+                    future.set_result(eeprom_data)
+        original_on_command(data)
 
     radio._on_command = intercepted_on_command
-
     try:
-        radio.send_command(Packet.READ_EEPROM, length, offset)
+        # Match V1 format: send_command(READ_EEPROM, u16(offset), 0, size, 0x12345678)
+        radio.send_command(Packet.READ_EEPROM, u16(offset), 0, size, 0x12345678)
         return await asyncio.wait_for(future, timeout=timeout)
     except asyncio.TimeoutError:
         logger.warning(f"EEPROM read timeout at offset 0x{offset:04X}")
         return None
     finally:
-        radio._on_command = original_reader_on_command
+        radio._on_command = original_on_command
+
+
+async def _send_eeprom_write(radio, offset: int, data: bytes, timeout: float = 3.0) -> bool:
+    """Send WRITE_EEPROM command and wait for the reply.
+    
+    Packet format (matching V1):
+      Send: WRITE_EEPROM, u16(offset), True(int), 0x12345678(int), data(bytes)
+      Reply: [cmd:2][paramLen:2][offset:2]
+    """
+    from backend.radio.protocol import Packet, u16
+
+    future = asyncio.get_event_loop().create_future()
+    original_on_command = radio._on_command
+
+    def intercepted_on_command(raw_data):
+        if len(raw_data) >= 2:
+            cmd = raw_data[0] | (raw_data[1] << 8)
+            if cmd == Packet.WRITE_EEPROM_REPLY and len(raw_data) >= 6:
+                resp_offset = raw_data[4] | (raw_data[5] << 8)
+                if resp_offset == offset and not future.done():
+                    future.set_result(True)
+        original_on_command(raw_data)
+
+    radio._on_command = intercepted_on_command
+    try:
+        radio.send_command(Packet.WRITE_EEPROM, u16(offset), 1, 0x12345678, data)
+        return await asyncio.wait_for(future, timeout=timeout)
+    except asyncio.TimeoutError:
+        logger.warning(f"EEPROM write timeout at offset 0x{offset:04X}")
+        return False
+    finally:
+        radio._on_command = original_on_command
 
 
 async def _eeprom_write_task(task_id: str, data: bytes, names: bytes, attrs: bytes):
@@ -192,11 +196,12 @@ async def _eeprom_write_task(task_id: str, data: bytes, names: bytes, attrs: byt
             return
 
         try:
-            pkt = build_packet(Packet.WRITE_EEPROM, u16(len(chunk)), offset, chunk)
-            # Send and wait briefly for ACK
-            radio.port.write(pkt)
-            radio.port.flush()
-            await asyncio.sleep(0.1)  # EEPROM write needs settling time
+            success = await _send_eeprom_write(radio, offset, chunk, timeout=3.0)
+            if not success:
+                _tasks[task_id]["status"] = "error"
+                _tasks[task_id]["error"] = f"Write failed at offset 0x{offset:04X}"
+                return
+            await asyncio.sleep(0.05)
 
             _tasks[task_id]["progress"] = idx + 1
         except Exception as e:
