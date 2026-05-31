@@ -230,7 +230,9 @@ class RadioConnection:
         from backend.radio.protocol import Packet, build_packet, u16, PacketParser
         import time as _time
 
-        pkt = build_packet(Packet.WRITE_EEPROM, u16(offset), 1, 0x12345678, data)
+        # Nicsure format: u16(offset), byte(size), byte(1), uint(timestamp), byte[](data)
+        size_byte = len(data) & 0xFF
+        pkt = build_packet(Packet.WRITE_EEPROM, u16(offset), bytes([size_byte, 1]), 0x12345678, data)
         self.port.write(pkt)
         self.port.flush()
 

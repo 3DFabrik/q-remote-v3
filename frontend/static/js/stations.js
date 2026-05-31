@@ -146,7 +146,7 @@ function startEdit(td, ch, field) {
     td.textContent = '';
     td.appendChild(input);
     input.focus();
-    input.select();
+    if (input.select) input.select();
 
     const commit = () => finishEdit(td, ch, field, input);
     const cancel = () => {
