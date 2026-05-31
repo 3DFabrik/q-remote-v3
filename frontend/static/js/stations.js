@@ -83,7 +83,6 @@ function renderTable() {
             <td class="col-mod">${escHtml(ch.modulation)}</td>
             <td class="col-bw">${escHtml(ch.bandwidth)}</td>
             <td class="col-power">${escHtml(ch.power)}</td>
-            <td class="col-band">${ch.band || '\u2014'}</td>
         </tr>
     `).join('');
 }

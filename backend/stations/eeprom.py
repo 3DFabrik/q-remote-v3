@@ -110,6 +110,26 @@ def _parse_name(name_bytes: bytes) -> str:
     return name
 
 
+def _freq_to_band(freq_mhz: float) -> int:
+    """Calculate band index from frequency in MHz (Nicsure-compatible)."""
+    if freq_mhz == 0:
+        return 15  # Empty channel
+    hz = freq_mhz * 100000
+    if hz < 10800000:
+        return 0   # FM Broadcast
+    elif hz < 13700000:
+        return 1   # Airband
+    elif hz < 17400000:
+        return 2   # VHF / 2m
+    elif hz < 35000000:
+        return 3   # VHF+
+    elif hz < 40000000:
+        return 4   # 350 MHz
+    elif hz < 47000000:
+        return 5   # UHF / 70cm
+    else:
+        return 6   # 470+
+
 def _pack_name(name: str) -> bytes:
     """Encode a name into 16 bytes, padded with 0x20 (space)."""
     encoded = name.encode('ascii', errors='replace')[:16]
@@ -253,23 +273,37 @@ def pack_channel(ch: dict) -> tuple[bytes, bytes, int]:
     data[15] = scramble & 0xFF
 
     # Name (16 bytes) - use raw bytes if available for lossless roundtrip
-    if "_raw_name" in ch and len(ch["_raw_name"]) == 16:
-        name = ch["_raw_name"]
+    raw_name = ch.get("_raw_name")
+    if raw_name is not None:
+        try:
+            raw_name_bytes = bytes(raw_name) if not isinstance(raw_name, (bytes, bytearray)) else raw_name
+            if len(raw_name_bytes) == 16:
+                name = raw_name_bytes
+            else:
+                name = _pack_name(ch.get("name", ""))
+        except (TypeError, ValueError):
+            name = _pack_name(ch.get("name", ""))
     else:
         name = _pack_name(ch.get("name", ""))
 
-    # Attr byte: preserve original if available, otherwise reconstruct
+    # Attr byte: reconstruct with band auto-calculated from frequency (Nicsure-compatible)
+    # Always recalculate band from rxFreq, preserve scanlist/compander from original
+    rxFreq = ch.get("rxFreq", 0)
+    band = _freq_to_band(rxFreq)
+
+    # Preserve scanlist and compander from raw attr if available, otherwise from parsed fields
     if "_raw_attr" in ch:
-        # Use stored raw attr for lossless roundtrip
-        attr_byte = ch["_raw_attr"]
+        raw = ch["_raw_attr"]
+        scanlist1 = bool(raw & 0x80)
+        scanlist2 = bool(raw & 0x40)
+        compander = (raw >> 4) & 0x03
     else:
-        # Reconstruct from parsed fields
         scanlist = SCANLIST_REV.get(ch.get("scanlist", "None"), 0)
         compander = COMPANDER_REV.get(ch.get("compander", "Off"), 0)
-        band = ch.get("band", 0)
         scanlist1 = bool(scanlist & 1)
         scanlist2 = bool(scanlist & 2)
-        attr_byte = ((1 if scanlist1 else 0) << 7) | ((1 if scanlist2 else 0) << 6) | (compander << 4) | (band & 0x0F)
+
+    attr_byte = ((1 if scanlist1 else 0) << 7) | ((1 if scanlist2 else 0) << 6) | (compander << 4) | (band & 0x0F)
 
     return bytes(data), name, attr_byte
 
