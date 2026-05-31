@@ -51,7 +51,7 @@ def _set_channels(channels: list[dict]):
 
 async def _eeprom_read_task(task_id: str):
     """Read EEPROM from radio in background."""
-    from backend.control.socketio_server import radio
+    import backend.control.socketio_server as _sio_mod; radio = _sio_mod.radio
 
     if not radio or not radio.connected:
         _tasks[task_id]["status"] = "error"
@@ -175,7 +175,7 @@ async def _send_eeprom_write(radio, offset: int, data: bytes, timeout: float = 3
 
 async def _eeprom_write_task(task_id: str, data: bytes, names: bytes, attrs: bytes):
     """Write EEPROM to radio in background."""
-    from backend.control.socketio_server import radio
+    import backend.control.socketio_server as _sio_mod; radio = _sio_mod.radio
 
     if not radio or not radio.connected:
         _tasks[task_id]["status"] = "error"

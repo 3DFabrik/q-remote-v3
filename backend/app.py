@@ -15,7 +15,8 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from backend.config import load_config, get
 from backend.utils.logging import setup_logging
-from backend.control.socketio_server import init_radio, radio, sio
+from backend.control.socketio_server import init_radio, sio
+import backend.control.socketio_server as _sio_mod
 from backend.audio.rx_pipeline import RxPipeline
 from backend.audio.tx_pipeline import TxPipeline
 from backend.stations.router import stations_router
@@ -43,7 +44,7 @@ async def lifespan(app: FastAPI):
     load_users()
     logger.info("Q-Remote V3 starting up")
 
-    r = init_radio()
+    r = init_radio()  # radio obj is at _sio_mod.radio
     connected = r.connect()  # blocking V1-style connect
     if connected:
         logger.info("Radio connected")
@@ -97,14 +98,14 @@ asgi_app = sio_module.ASGIApp(sio, other_asgi_app=app, socketio_path='socket.io'
 
 @app.get("/api/health")
 async def health_check():
-    if radio and radio.connected:
+    if _sio_mod.radio and _sio_mod.radio.connected:
         return {"status": "ok", "radio": "connected", "version": "3.0.0"}
     return {"status": "degraded", "radio": "disconnected", "version": "3.0.0"}
 
 
 @app.get("/api/status")
 async def get_status():
-    if not radio or not radio.connected:
+    if not _sio_mod.radio or not _sio_mod.radio.connected:
         return {"state": "disconnected"}
     return {"state": "connected"}
 
