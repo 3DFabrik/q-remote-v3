@@ -18,8 +18,8 @@ from backend.utils.logging import setup_logging
 from backend.control.socketio_server import init_radio, radio, sio
 from backend.audio.rx_pipeline import RxPipeline
 from backend.audio.tx_pipeline import TxPipeline
-from backend.auth import (
 from backend.stations.router import stations_router
+from backend.auth import (
     SECRET_KEY, USERS, load_users, save_users, log_activity,
     get_current_user, get_ws_user, is_admin, login_required, admin_required,
 )
