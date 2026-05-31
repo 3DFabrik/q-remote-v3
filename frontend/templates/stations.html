@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Q-Remote V3 — Stations Editor</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/stations.css">
+</head>
+<body>
+    <div id="app" class="stations-app">
+        <!-- Header -->
+        <header class="stations-header">
+            <div class="header-brand">
+                <a href="/" class="back-btn" title="Back to main">&#x2190;</a>
+                <h1>Stations Editor</h1>
+                <div class="status-indicator">
+                    <div id="status-light" class="status-light"></div>
+                    <span id="radio-status">CHECKING</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Action Bar -->
+        <div class="instrument-panel action-bar">
+            <div class="panel-label">Channel Operations</div>
+            <div class="action-buttons">
+                <button id="btn-read" class="radio-btn action-btn" title="Read channels from radio EEPROM">
+                    <span class="btn-label">&#x2B07; Read from Radio</span>
+                </button>
+                <button id="btn-write" class="radio-btn action-btn" title="Write channels to radio EEPROM">
+                    <span class="btn-label">&#x2B06; Write to Radio</span>
+                </button>
+                <button id="btn-export" class="radio-btn action-btn" title="Export channels as CSV">
+                    <span class="btn-label">&#x1F4BE; Export CSV</span>
+                </button>
+                <label class="radio-btn action-btn import-label" title="Import channels from CSV">
+                    <span class="btn-label">&#x1F4C2; Import CSV</span>
+                    <input type="file" id="file-import" accept=".csv" hidden>
+                </label>
+            </div>
+
+            <!-- Progress Bar -->
+            <div id="progress-section" class="progress-section" style="display:none;">
+                <div class="progress-label">
+                    <span id="progress-text">Reading EEPROM...</span>
+                    <span id="progress-count">0/0</span>
+                </div>
+                <div class="progress-track">
+                    <div id="progress-bar" class="progress-fill"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="instrument-panel filter-bar">
+            <div class="filter-group">
+                <span class="engraved">Show:</span>
+                <button class="radio-btn filter-btn active" data-filter="used">Used Only</button>
+                <button class="radio-btn filter-btn" data-filter="all">All Channels</button>
+            </div>
+            <div class="channel-count">
+                <span class="engraved">Channels: <strong id="count-used">0</strong> used / <strong id="count-total">200</strong></span>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="instrument-panel table-panel">
+            <div class="panel-label">Channel Memory</div>
+            <div class="table-wrapper">
+                <table id="channels-table">
+                    <thead>
+                        <tr>
+                            <th class="col-num">#</th>
+                            <th class="col-name">Name</th>
+                            <th class="col-freq">RX Freq</th>
+                            <th class="col-offset">TX Offset</th>
+                            <th class="col-dir">Dir</th>
+                            <th class="col-code">RX Code</th>
+                            <th class="col-code">TX Code</th>
+                            <th class="col-mod">Mod</th>
+                            <th class="col-bw">BW</th>
+                            <th class="col-power">Power</th>
+                            <th class="col-band">Band</th>
+                        </tr>
+                    </thead>
+                    <tbody id="channels-body">
+                        <tr><td colspan="11" class="empty-msg">No channels loaded. Click "Read from Radio" to load.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Backups Panel -->
+        <div class="instrument-panel backups-panel">
+            <div class="panel-label">Backups</div>
+            <div id="backups-list" class="backups-list">
+                <span class="engraved">Loading...</span>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="stations-footer">
+            <span class="engraved">Q-Remote V3 &mdash; Stations Editor</span>
+        </footer>
+    </div>
+
+    <script type="module" src="/static/js/stations.js"></script>
+</body>
+</html>

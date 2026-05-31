@@ -19,6 +19,7 @@ from backend.control.socketio_server import init_radio, radio, sio
 from backend.audio.rx_pipeline import RxPipeline
 from backend.audio.tx_pipeline import TxPipeline
 from backend.auth import (
+from backend.stations.router import stations_router
     SECRET_KEY, USERS, load_users, save_users, log_activity,
     get_current_user, get_ws_user, is_admin, login_required, admin_required,
 )
@@ -84,6 +85,9 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
+
+# Stations Editor module
+app.include_router(stations_router)
 
 import socketio as sio_module
 asgi_app = sio_module.ASGIApp(sio, other_asgi_app=app, socketio_path='socket.io')
