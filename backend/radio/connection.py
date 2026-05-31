@@ -119,12 +119,13 @@ class RadioConnection:
             parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
             bytesize=serial.EIGHTBITS, timeout=1.0, write_timeout=10,
         )
-        # Drain any pending data
-        _time.sleep(0.05)
-        try:
-            self.port.read(4096)
-        except Exception:
-            pass
+        # Drain all pending UI data thoroughly
+        for _ in range(5):
+            _time.sleep(0.1)
+            try:
+                self.port.read(4096)
+            except Exception:
+                pass
         self._eeprom_mode = True
 
     def exit_eeprom_mode(self):
@@ -197,6 +198,30 @@ class RadioConnection:
             if result[0] is not None:
                 return result[0]
 
+        # Retry once if first attempt fails (common for first chunk after mode switch)
+        if result[0] is None:
+            pkt = build_packet(Packet.READ_EEPROM, u16(offset), u16(size), 0x12345678)
+            self.port.write(pkt)
+            self.port.flush()
+            buf.clear()
+            deadline = _time.time() + timeout
+            while _time.time() < deadline:
+                chunk = self.port.read(256)
+                if chunk:
+                    buf.extend(chunk)
+                result[0] = None
+                def on_cmd2(data):
+                    if len(data) >= 2:
+                        cmd = data[0] | (data[1] << 8)
+                        if cmd == Packet.READ_EEPROM_REPLY and len(data) >= 9:
+                            resp_offset = data[4] | (data[5] << 8)
+                            resp_size = data[6]
+                            if resp_offset == offset:
+                                result[0] = bytes(data[8:8 + resp_size])
+                parser2 = PacketParser()
+                parser2.feed(bytes(buf), on_command=on_cmd2, on_ui=lambda *a: None)
+                if result[0] is not None:
+                    return result[0]
         return None  # Timeout
 
     def eeprom_write_chunk(self, offset: int, data: bytes, timeout: float = 3.0):
