@@ -217,15 +217,23 @@ function bindEvents() {
     // Import CSV
     document.getElementById('file-import').addEventListener('change', importCSV);
 
-    // Filter buttons
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            filter = btn.dataset.filter;
+// Filter toggle button
+    const filterBtn = document.getElementById('btn-filter');
+    if (filterBtn) {
+        filterBtn.addEventListener('click', () => {
+            if (filter === 'used') {
+                filter = 'all';
+                filterBtn.textContent = 'All';
+                filterBtn.dataset.filter = 'all';
+            } else {
+                filter = 'used';
+                filterBtn.textContent = 'Used';
+                filterBtn.dataset.filter = 'used';
+            }
+            filterBtn.classList.toggle('active', filter === 'used');
             renderTable();
         });
-    });
+    }
 
     // Table click — row select and inline edit
     tbody.addEventListener('click', e => {

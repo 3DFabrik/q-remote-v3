@@ -38,7 +38,7 @@ body {
     color: var(--white);
     min-height: 100vh;
     display: flex;
-    justify-content: center;
+    justify-content: center !important;
     padding: 12px;
     /* Brushed metal texture */
     background-image: 
@@ -96,6 +96,70 @@ body {
     font-weight: bold;
 }
 
+.action-buttons {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    width: 100%;
+}
+
+#btn-read, #btn-write, #btn-export,
+.action-buttons .import-label {
+    flex: 1 1 0;
+    min-width: 0;
+    display: block !important;
+    text-align: center;
+    padding: 3px 6px !important;
+    font-size: 0.7rem !important;
+    border-radius: 3px;
+    line-height: 1.2 !important;
+}
+
+#btn-read .btn-label, #btn-write .btn-label,
+#btn-export .btn-label, .action-buttons .import-label .btn-label {
+    font-size: 0.7rem !important;
+    text-align: center;
+}
+
+.action-buttons .filter-btn {
+    padding: 3px 8px !important;
+    font-size: 0.7rem !important;
+    display: block !important;
+    text-align: center;
+    line-height: 1.2 !important;
+    flex: 0 0 auto;
+    outline: none !important;
+    filter: none !important;
+}
+
+.action-buttons .filter-btn:focus {
+    outline: none !important;
+    filter: none !important;
+}
+
+.action-buttons .filter-btn.active {
+    background: linear-gradient(180deg, #8B6914 0%, #6B4F10 40%, #4A370B 100%) !important;
+    box-shadow: 0 2px 0 #222, 0 3px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15) !important;
+    color: #FFD700 !important;
+    text-shadow: none !important;
+}
+
+.action-sep {
+    flex: 0 0 1px;
+    background: #444;
+    margin: 2px 4px;
+    align-self: stretch;
+}
+
+.action-buttons .channel-count {
+    color: #888;
+    font-size: 0.65rem;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    padding: 0 4px;
+}
+
 #crt-bezel.instrument-panel {
     padding: 16px;
 }
@@ -131,7 +195,7 @@ header {
 .header-center {
     flex: 1;
     display: flex;
-    justify-content: center;
+    justify-content: center !important;
     align-items: center;
 }
 .header-center #user-name {
@@ -149,7 +213,7 @@ header {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: center !important;
     font-family: var(--font-mono);
     font-size: 10px;
     color: var(--white);
@@ -297,7 +361,7 @@ header {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: center !important;
     min-width: 120px;
 }
 
@@ -311,7 +375,7 @@ header {
     display: flex;
     gap: 8px;
     margin-bottom: 10px;
-    justify-content: center;
+    justify-content: center !important;
 }
 
 /* Top row buttons (M ▲ ▼ EXIT) equally spaced */
@@ -372,7 +436,7 @@ header {
 /* Buttons without sub-label: center the main label */
 .radio-btn.nav-key,
 .radio-btn.arrow-key {
-    justify-content: center;
+    justify-content: center !important;
 }
 
 .radio-btn:active {

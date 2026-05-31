@@ -4,20 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Q-Remote V3 — Stations Editor</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=10">
     <link rel="stylesheet" href="/static/css/stations.css">
 </head>
 <body>
     <div id="app" class="stations-app">
         <!-- Header -->
         <header class="stations-header">
-            <div class="header-brand">
-                <a href="/" class="back-btn" title="Back to main">&#x2190;</a>
+            <div class="header-left">
                 <h1>Stations Editor</h1>
                 <div class="status-indicator">
                     <div id="status-light" class="status-light"></div>
                     <span id="radio-status">CHECKING</span>
                 </div>
+            </div>
+            <div class="header-right">
+                <a href="/" class="back-btn" title="Back to main">&#x2190; Back</a>
             </div>
         </header>
 
@@ -38,6 +40,10 @@
                     <span class="btn-label">&#x1F4C2; Import CSV</span>
                     <input type="file" id="file-import" accept=".csv" hidden>
                 </label>
+                <span class="action-sep"></span>
+                <button id="btn-filter" class="radio-btn filter-btn active" data-filter="used" title="Toggle filter">Used</button>
+                <span class="action-sep"></span>
+                <span class="channel-count"><strong id="count-used">0</strong>/<strong id="count-total">200</strong></span>
             </div>
 
             <!-- Progress Bar -->
@@ -52,17 +58,7 @@
             </div>
         </div>
 
-        <!-- Filter Bar -->
-        <div class="instrument-panel filter-bar">
-            <div class="filter-group">
-                <span class="engraved">Show:</span>
-                <button class="radio-btn filter-btn active" data-filter="used">Used Only</button>
-                <button class="radio-btn filter-btn" data-filter="all">All Channels</button>
-            </div>
-            <div class="channel-count">
-                <span class="engraved">Channels: <strong id="count-used">0</strong> used / <strong id="count-total">200</strong></span>
-            </div>
-        </div>
+
 
         <!-- Data Table -->
         <div class="instrument-panel table-panel">

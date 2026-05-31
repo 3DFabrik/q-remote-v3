@@ -20,10 +20,15 @@
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
 }
 
-.stations-header .header-brand {
+.stations-header .header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stations-header .header-right {
     display: flex;
     align-items: center;
-    gap: 12px;
 }
 
 .stations-header h1 {
@@ -39,15 +44,16 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    gap: 4px;
+    padding: 6px 12px;
     background: linear-gradient(180deg, #d0c8b8 0%, #a09888 100%);
     border: 2px solid var(--panel-border);
     border-radius: 6px;
     color: var(--panel-inner);
     text-decoration: none;
-    font-size: 1.2rem;
+    font-size: 0.8rem;
     font-weight: bold;
+    font-family: var(--font-mono);
     box-shadow: 0 2px 4px rgba(0,0,0,0.3);
     transition: all 0.15s;
 }
@@ -151,10 +157,29 @@
 
 .table-wrapper {
     overflow-x: auto;
+    overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     border: 2px solid var(--panel-border);
     border-radius: 4px;
     background: var(--crt-bg);
+    max-height: 55vh;
+}
+
+.table-wrapper::-webkit-scrollbar {
+    width: 8px;
+}
+
+.table-wrapper::-webkit-scrollbar-track {
+    background: var(--panel-inner);
+}
+
+.table-wrapper::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 4px;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb:hover {
+    background: #777;
 }
 
 #channels-table {
