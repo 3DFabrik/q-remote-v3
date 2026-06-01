@@ -305,9 +305,9 @@
 
 .backups-list {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    max-height: 150px;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 200px;
     overflow-y: auto;
 }
 
@@ -325,6 +325,7 @@
 
 .backup-item .backup-time {
     color: var(--amber);
+    flex: 1;
 }
 
 .backup-item button {

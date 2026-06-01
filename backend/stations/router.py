@@ -374,6 +374,18 @@ async def api_list_backups(_=Depends(login_required)):
     return {"backups": _list_backups()}
 
 
+@stations_router.delete("/api/stations/backups/{backup_id}")
+async def api_delete_backup(backup_id: str, _=Depends(login_required)):
+    """Delete a specific backup file."""
+    safe_id = backup_id.replace("/", "").replace("\\", "").replace("..", "")
+    backup_path = BACKUPS_DIR / f"{safe_id}.chan"
+    if not backup_path.exists():
+        raise HTTPException(status_code=404, detail="Backup not found")
+    backup_path.unlink()
+    logger.info(f"Backup deleted: {backup_path}")
+    return {"deleted": True}
+
+
 @stations_router.get("/api/stations/backups/{backup_id}")
 async def api_download_backup(backup_id: str, _=Depends(login_required)):
     """Download a specific backup file."""

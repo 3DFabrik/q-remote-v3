@@ -402,13 +402,8 @@ async function importCSV(e) {
         }
 
         if (data.channels && data.channels.length > 0) {
-            // Merge imported channels into existing list
-            for (const ch of data.channels) {
-                const idx = channels.findIndex(c => c.number === ch.number);
-                if (idx >= 0) {
-                    channels[idx] = ch;
-                }
-            }
+            // Replace entire channel list with imported data
+            channels = data.channels;
             renderTable();
             alert(`Imported ${data.imported} channels.`);
         }
@@ -437,10 +432,11 @@ async function loadBackups() {
             return `
                 <div class="backup-item">
                     <span class="backup-time">${escHtml(time)}</span>
-                    <button onclick="restoreBackup('${escHtml(b.id)}')">Restore</button>
+                    <button onclick="restoreBackup('${escHtml(b.id)}')">Load</button>
                     <a href="/stations/api/stations/backups/${escHtml(b.id)}" download>
                         <button>Download</button>
                     </a>
+                    <button onclick="deleteBackup('${escHtml(b.id)}')">Delete</button>
                 </div>
             `;
         }).join('');
@@ -449,13 +445,24 @@ async function loadBackups() {
     }
 }
 
+window.deleteBackup = async function(backupId) {
+    if (!confirm('Delete this backup permanently?')) return;
+    try {
+        const res = await fetch(`/stations/api/stations/backups/${backupId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Delete failed');
+        loadBackups();
+    } catch (e) {
+        alert('Delete failed: ' + e.message);
+    }
+};
+
 window.restoreBackup = async function(backupId) {
-    if (!confirm('Restore this backup? Current channels will be replaced.')) return;
+    if (!confirm('Load this backup into the editor?')) return;
     try {
         const res = await fetch(`/stations/api/stations/restore/${backupId}`, { method: 'POST' });
         const data = await res.json();
         await loadChannels();
-        alert(`Restored ${data.restored} channels from backup.`);
+        alert(`Loaded ${data.restored} channels into editor.`);
     } catch (e) {
         alert('Restore failed: ' + e.message);
     }
