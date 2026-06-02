@@ -233,6 +233,7 @@ class RadioConnection:
         # Nicsure format: u16(offset), byte(size), byte(1), uint(timestamp), byte[](data)
         size_byte = len(data) & 0xFF
         pkt = build_packet(Packet.WRITE_EEPROM, u16(offset), bytes([size_byte, 1]), 0x12345678, data)
+        log.info(f"WRITE EEPROM: offset=0x{offset:04X} size={size_byte} data_len={len(data)} pkt_len={len(pkt)} pkt_hdr={pkt[:12].hex()}")
         self.port.write(pkt)
         self.port.flush()
 
@@ -253,8 +254,10 @@ class RadioConnection:
             parser = PacketParser()
             parser.feed(bytes(buf), on_command=on_cmd, on_ui=lambda *a: None)
             if result[0]:
+                log.info(f"WRITE EEPROM ACK: offset=0x{offset:04X}")
                 return True
 
+        log.warning(f"WRITE EEPROM TIMEOUT: offset=0x{offset:04X} buf={len(buf)}b")
         return False  # Timeout
 
     def disconnect(self):

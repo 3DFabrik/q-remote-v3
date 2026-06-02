@@ -134,14 +134,18 @@ async def _eeprom_write_task(task_id: str, data: bytes, names: bytes, attrs: byt
     _tasks[task_id]["total"] = total_chunks
 
     try:
+        logger.info(f"EEPROM write: entering eeprom mode, {total_chunks} chunks to write")
         radio.enter_eeprom_mode()
+        logger.info("EEPROM write: eeprom mode entered, starting chunk writes")
 
         for idx, (offset, chunk) in enumerate(regions):
             if _tasks[task_id]["status"] == "cancelled":
                 return
 
+            logger.debug(f"EEPROM write chunk {idx+1}/{total_chunks}: offset=0x{offset:04X} size={len(chunk)}")
             success = radio.eeprom_write_chunk(offset, chunk, timeout=3.0)
             if not success:
+                logger.error(f"EEPROM write FAILED at chunk {idx+1}: offset=0x{offset:04X}")
                 _tasks[task_id]["status"] = "error"
                 _tasks[task_id]["error"] = f"Write failed at offset 0x{offset:04X}"
                 return
@@ -149,13 +153,17 @@ async def _eeprom_write_task(task_id: str, data: bytes, names: bytes, attrs: byt
             _tasks[task_id]["progress"] = idx + 1
             await asyncio.sleep(0.05)
 
+        logger.info(f"EEPROM write: all {total_chunks} chunks written successfully")
+
     except Exception as e:
         logger.error(f"EEPROM write error: {e}")
         _tasks[task_id]["status"] = "error"
         _tasks[task_id]["error"] = str(e)
         return
     finally:
+        logger.info("EEPROM write: exiting eeprom mode")
         radio.exit_eeprom_mode()
+        logger.info("EEPROM write: eeprom mode exited")
 
     _tasks[task_id]["status"] = "completed"
     _tasks[task_id]["result"] = {"backup_id": backup_id}

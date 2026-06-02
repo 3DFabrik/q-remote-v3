@@ -396,3 +396,25 @@
         flex-wrap: wrap;
     }
 }
+
+/* ─── New columns (full data view) ─────────────────────── */
+.col-step { min-width: 65px; }
+.col-bool { min-width: 40px; text-align: center; }
+.col-pttid { min-width: 50px; }
+.col-scramble { min-width: 70px; }
+.col-compander { min-width: 70px; }
+.col-scanlist { min-width: 65px; }
+.col-band { min-width: 40px; text-align: center; }
+
+/* ─── Code editor (type + value inline) ────────────────── */
+.code-editor {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+.code-editor select {
+    width: 75px;
+}
+.code-editor input {
+    width: 40px;
+}

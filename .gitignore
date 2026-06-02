@@ -224,3 +224,4 @@ __marimo__/
 *.ulaw-bak
 users.json
 backups/
+*.bak

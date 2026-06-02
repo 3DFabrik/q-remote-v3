@@ -291,17 +291,12 @@ def pack_channel(ch: dict) -> tuple[bytes, bytes, int]:
     rxFreq = ch.get("rxFreq", 0)
     band = _freq_to_band(rxFreq)
 
-    # Preserve scanlist and compander from raw attr if available, otherwise from parsed fields
-    if "_raw_attr" in ch:
-        raw = ch["_raw_attr"]
-        scanlist1 = bool(raw & 0x80)
-        scanlist2 = bool(raw & 0x40)
-        compander = (raw >> 4) & 0x03
-    else:
-        scanlist = SCANLIST_REV.get(ch.get("scanlist", "None"), 0)
-        compander = COMPANDER_REV.get(ch.get("compander", "Off"), 0)
-        scanlist1 = bool(scanlist & 1)
-        scanlist2 = bool(scanlist & 2)
+    # Always use parsed fields for scanlist and compander
+    # (user edits change ch["scanlist"]/ch["compander"], not _raw_attr)
+    scanlist = SCANLIST_REV.get(ch.get("scanlist", "None"), 0)
+    compander = COMPANDER_REV.get(ch.get("compander", "Off"), 0)
+    scanlist1 = bool(scanlist & 1)
+    scanlist2 = bool(scanlist & 2)
 
     attr_byte = ((1 if scanlist1 else 0) << 7) | ((1 if scanlist2 else 0) << 6) | (compander << 4) | (band & 0x0F)
 

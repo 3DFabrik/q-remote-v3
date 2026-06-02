@@ -1,6 +1,6 @@
 /**
  * Q-Remote V3 — Stations Editor
- * Vanilla ES module for channel memory management.
+ * Vanilla JS for channel memory management with full inline editing.
  */
 
 // ─── State ────────────────────────────────────────────────────
@@ -12,6 +12,56 @@ let editingCell = null;
 
 const table = document.getElementById('channels-table');
 const tbody = document.getElementById('channels-body');
+
+// ─── Editable field definitions ───────────────────────────────
+
+const EDITABLE = {
+    name:        { type: 'text',     maxLen: 16 },
+    rxFreq:      { type: 'number',   min: 0, max: 999.99999, step: 0.00001 },
+    txOffset:    { type: 'number',   min: 0, max: 999.99999, step: 0.00001 },
+    offsetDir:   { type: 'select',   options: ['Off', '+', '-'] },
+    rxCode:      { type: 'code',     codeTypeField: 'rxCodeType' },
+    txCode:      { type: 'code',     codeTypeField: 'txCodeType' },
+    modulation:  { type: 'select',   options: ['FM', 'AM', 'USB'] },
+    bandwidth:   { type: 'select',   options: ['Wide', 'Narrow'] },
+    power:       { type: 'select',   options: ['High', 'Mid', 'Low'] },
+    step:        { type: 'select',   options: [
+        '2.5kHz','5kHz','6.25kHz','10kHz','12.5kHz','25kHz','8.33kHz',
+        '0.01kHz','0.05kHz','0.1kHz','0.25kHz','0.5kHz','1kHz',
+        '1.25kHz','15kHz','30kHz','50kHz','100kHz','125kHz','250kHz','500kHz'
+    ]},
+    busyLock:    { type: 'toggle' },
+    reverse:     { type: 'toggle' },
+    pttId:       { type: 'select',   options: ['Off', 'BOT', 'EOT', 'Both'] },
+    dtmf:        { type: 'toggle' },
+    scramble:    { type: 'select',   options: [
+        'Off','2600Hz','2700Hz','2800Hz','2900Hz','3000Hz','3100Hz',
+        '3200Hz','3300Hz','3400Hz','3500Hz'
+    ]},
+    compander:   { type: 'select',   options: ['Off', 'TX', 'RX', 'Both'] },
+    scanlist:    { type: 'select',   options: ['None', 'List 1', 'List 2', 'Both'] },
+    // band and number are NOT editable (band is auto-calculated)
+};
+
+// ─── Column class → field mapping (in table order) ────────────
+
+const COL_FIELD_MAP = [
+    { cls: 'col-name',       field: 'name' },
+    { cls: 'col-freq',       field: 'rxFreq' },
+    { cls: 'col-offset',     field: 'txOffset' },
+    { cls: 'col-dir',        field: 'offsetDir' },
+    { cls: 'col-rxcode',     field: 'rxCode' },
+    { cls: 'col-txcode',     field: 'txCode' },
+    { cls: 'col-mod',        field: 'modulation' },
+    { cls: 'col-bw',         field: 'bandwidth' },
+    { cls: 'col-power',      field: 'power' },
+    { cls: 'col-step',       field: 'step' },
+    { cls: 'col-bool',       field: null },  // resolved per-cell via data-field
+    { cls: 'col-pttid',      field: 'pttId' },
+    { cls: 'col-scramble',   field: 'scramble' },
+    { cls: 'col-compander',  field: 'compander' },
+    { cls: 'col-scanlist',   field: 'scanlist' },
+];
 
 // ─── Init ─────────────────────────────────────────────────────
 
@@ -67,7 +117,7 @@ function renderTable() {
     document.getElementById('count-total').textContent = channels.length;
 
     if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="11" class="empty-msg">No channels loaded. Click "Read from Radio" to load.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="19" class="empty-msg">No channels loaded. Click "Read from Radio" to load.</td></tr>';
         return;
     }
 
@@ -78,11 +128,20 @@ function renderTable() {
             <td class="col-freq">${fmtFreq(ch.rxFreq)}</td>
             <td class="col-offset">${fmtFreq(ch.txOffset)}</td>
             <td class="col-dir">${escHtml(ch.offsetDir)}</td>
-            <td class="col-code">${fmtCode(ch.rxCode, ch.rxCodeType)}</td>
-            <td class="col-code">${fmtCode(ch.txCode, ch.txCodeType)}</td>
+            <td class="col-rxcode">${fmtCode(ch.rxCode, ch.rxCodeType)}</td>
+            <td class="col-txcode">${fmtCode(ch.txCode, ch.txCodeType)}</td>
             <td class="col-mod">${escHtml(ch.modulation)}</td>
             <td class="col-bw">${escHtml(ch.bandwidth)}</td>
             <td class="col-power">${escHtml(ch.power)}</td>
+            <td class="col-step">${escHtml(ch.step || '\u2014')}</td>
+            <td class="col-bool" data-field="busyLock">${fmtBool(ch.busyLock)}</td>
+            <td class="col-bool" data-field="reverse">${fmtBool(ch.reverse)}</td>
+            <td class="col-pttid">${escHtml(ch.pttId)}</td>
+            <td class="col-bool" data-field="dtmf">${fmtBool(ch.dtmf)}</td>
+            <td class="col-scramble">${escHtml(ch.scramble)}</td>
+            <td class="col-compander">${escHtml(ch.compander)}</td>
+            <td class="col-scanlist">${escHtml(ch.scanlist)}</td>
+            <td class="col-band">${ch.band !== undefined ? ch.band : '\u2014'}</td>
         </tr>
     `).join('');
 }
@@ -112,6 +171,10 @@ function fmtCode(code, codeType) {
     return `${code}`;
 }
 
+function fmtBool(val) {
+    return val ? '\u2713' : '\u2014';
+}
+
 function escHtml(str) {
     const d = document.createElement('div');
     d.textContent = str;
@@ -122,24 +185,49 @@ function escHtml(str) {
 
 function startEdit(td, ch, field) {
     if (editingCell) return;
+    const def = EDITABLE[field];
+    if (!def) return;
+
     editingCell = { td, ch, field };
     td.classList.add('editing');
 
-    const raw = ch[field];
     let input;
 
-    if (field === 'offsetDir') {
-        input = createSelect(['Off', '+', '-'], raw);
-    } else if (field === 'modulation') {
-        input = createSelect(['FM', 'AM', 'USB'], raw);
-    } else if (field === 'bandwidth') {
-        input = createSelect(['Wide', 'Narrow'], raw);
-    } else if (field === 'power') {
-        input = createSelect(['High', 'Mid', 'Low'], raw);
-    } else {
-        input = document.createElement('input');
-        input.type = 'text';
-        input.value = field === 'rxFreq' || field === 'txOffset' ? fmtFreq(raw) : (raw || '');
+    switch (def.type) {
+        case 'select':
+            input = createSelect(def.options, ch[field]);
+            break;
+
+        case 'toggle':
+            // Toggle immediately — no input needed
+            ch[field] = !ch[field];
+            saveChannel(ch);
+            editingCell = null;
+            td.classList.remove('editing');
+            renderTable();
+            return;
+
+        case 'code':
+            // Show code type dropdown + code number input
+            startCodeEdit(td, ch, field, def);
+            return;
+
+        case 'number':
+            input = document.createElement('input');
+            input.type = 'number';
+            input.value = ch[field] || 0;
+            if (def.min !== undefined) input.min = def.min;
+            if (def.max !== undefined) input.max = def.max;
+            if (def.step !== undefined) input.step = def.step;
+            break;
+
+        case 'text':
+        default:
+            input = document.createElement('input');
+            input.type = 'text';
+            input.value = ch[field] || '';
+            if (def.maxLen) input.maxLength = def.maxLen;
+            break;
     }
 
     td.textContent = '';
@@ -147,7 +235,7 @@ function startEdit(td, ch, field) {
     input.focus();
     if (input.select) input.select();
 
-    const commit = () => finishEdit(td, ch, field, input);
+    const commit = () => finishEdit(td, ch, field, input, def);
     const cancel = () => {
         td.classList.remove('editing');
         renderTable();
@@ -159,6 +247,91 @@ function startEdit(td, ch, field) {
         if (e.key === 'Escape') { e.preventDefault(); cancel(); }
     });
     input.addEventListener('blur', commit);
+}
+
+function startCodeEdit(td, ch, field, def) {
+    const codeTypeField = def.codeTypeField;
+    const currentType = ch[codeTypeField] || 'None';
+    const currentCode = ch[field] || 0;
+
+    const wrapper = document.createElement('span');
+    wrapper.className = 'code-editor';
+
+    const typeSelect = createSelect(['None', 'CTCSS', 'DCS', 'ReverseDCS'], currentType);
+    const codeInput = document.createElement('input');
+    codeInput.type = 'number';
+    codeInput.value = currentCode;
+    codeInput.min = 0;
+    codeInput.style.width = '40px';
+
+    // When type is None, disable code input
+    codeInput.disabled = (currentType === 'None');
+
+    typeSelect.addEventListener('change', () => {
+        codeInput.disabled = (typeSelect.value === 'None');
+        if (typeSelect.value === 'None') codeInput.value = 0;
+    });
+
+    wrapper.appendChild(typeSelect);
+    wrapper.appendChild(codeInput);
+    td.textContent = '';
+    td.appendChild(wrapper);
+    typeSelect.focus();
+
+    const commit = () => {
+        if (!editingCell) return;
+        editingCell = null;
+        td.classList.remove('editing');
+
+        const newType = typeSelect.value;
+        let newCode = parseInt(codeInput.value) || 0;
+
+        // Validate code range
+        if (newType === 'CTCSS') {
+            newCode = Math.max(0, Math.min(49, newCode));
+        } else if (newType === 'DCS' || newType === 'ReverseDCS') {
+            newCode = Math.max(0, Math.min(511, newCode));
+        } else {
+            newCode = 0;
+        }
+
+        ch[codeTypeField] = newType;
+        ch[field] = newCode;
+        saveChannel(ch);
+        renderTable();
+    };
+
+    const cancel = () => {
+        td.classList.remove('editing');
+        renderTable();
+        editingCell = null;
+    };
+
+    typeSelect.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    });
+    codeInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    });
+
+    // Blur on the LAST input commits
+    codeInput.addEventListener('blur', e => {
+        // Only commit if focus left the wrapper entirely
+        setTimeout(() => {
+            if (editingCell && !wrapper.contains(document.activeElement)) {
+                commit();
+            }
+        }, 100);
+    });
+    typeSelect.addEventListener('blur', e => {
+        setTimeout(() => {
+            if (editingCell && !wrapper.contains(document.activeElement)) {
+                commit();
+            }
+        }, 100);
+    });
 }
 
 function createSelect(options, current) {
@@ -173,20 +346,48 @@ function createSelect(options, current) {
     return sel;
 }
 
-async function finishEdit(td, ch, field, input) {
+async function finishEdit(td, ch, field, input, def) {
     if (!editingCell) return;
     editingCell = null;
     td.classList.remove('editing');
 
     let val = input.value;
-    if (field === 'rxFreq' || field === 'txOffset') {
-        val = parseFloat(val);
-        if (isNaN(val)) val = 0;
+
+    switch (def.type) {
+        case 'number':
+            val = parseFloat(val);
+            if (isNaN(val)) {
+                renderTable();
+                return;
+            }
+            if (def.min !== undefined) val = Math.max(def.min, val);
+            if (def.max !== undefined) val = Math.min(def.max, val);
+            break;
+
+        case 'text':
+            val = val.trim();
+            if (def.maxLen) val = val.substring(0, def.maxLen);
+            // Only ASCII for radio names
+            val = val.replace(/[^\x20-\x7E]/g, '');
+            break;
+
+        case 'select':
+            // Value is already valid (from dropdown)
+            break;
     }
 
     ch[field] = val;
 
-    // Update on server
+    // Re-calculate inUse based on rxFreq
+    if (field === 'rxFreq') {
+        ch.inUse = val > 0;
+    }
+
+    saveChannel(ch);
+    renderTable();
+}
+
+async function saveChannel(ch) {
     try {
         await fetch('/stations/api/stations/update', {
             method: 'POST',
@@ -196,8 +397,6 @@ async function finishEdit(td, ch, field, input) {
     } catch (e) {
         console.error('Failed to save channel:', e);
     }
-
-    renderTable();
 }
 
 // ─── Event Bindings ───────────────────────────────────────────
@@ -217,7 +416,7 @@ function bindEvents() {
     // Import CSV
     document.getElementById('file-import').addEventListener('change', importCSV);
 
-// Filter toggle button
+    // Filter toggle button
     const filterBtn = document.getElementById('btn-filter');
     if (filterBtn) {
         filterBtn.addEventListener('click', () => {
@@ -249,22 +448,21 @@ function bindEvents() {
         document.querySelectorAll('#channels-table tr.selected').forEach(r => r.classList.remove('selected'));
         tr.classList.add('selected');
 
-        // Inline edit — determine field from column class
-        const fieldMap = {
-            'col-name': 'name',
-            'col-freq': 'rxFreq',
-            'col-offset': 'txOffset',
-            'col-dir': 'offsetDir',
-            'col-code': null,  // would need to know rx/tx
-            'col-mod': 'modulation',
-            'col-bw': 'bandwidth',
-            'col-power': 'power',
-        };
+        // Skip editing for col-num and col-band
+        if (td.classList.contains('col-num') || td.classList.contains('col-band')) return;
 
-        for (const [cls, field] of Object.entries(fieldMap)) {
-            if (td.classList.contains(cls) && field) {
+        // Check for data-field attribute (boolean columns)
+        const dataField = td.getAttribute('data-field');
+        if (dataField && EDITABLE[dataField]) {
+            startEdit(td, ch, dataField);
+            return;
+        }
+
+        // Check column class → field mapping
+        for (const { cls, field } of COL_FIELD_MAP) {
+            if (td.classList.contains(cls) && field && EDITABLE[field]) {
                 startEdit(td, ch, field);
-                break;
+                return;
             }
         }
     });
@@ -275,7 +473,7 @@ function bindEvents() {
 async function readFromRadio() {
     const btn = document.getElementById('btn-read');
     btn.disabled = true;
-    btn.querySelector('.btn-label').textContent = '⏳ Reading...';
+    btn.querySelector('.btn-label').textContent = '\u23F3 Reading...';
 
     showProgress('Reading EEPROM from radio...', 0, 0);
 
@@ -293,7 +491,7 @@ async function readFromRadio() {
         alert('Failed to read from radio: ' + e.message);
     } finally {
         btn.disabled = false;
-        btn.querySelector('.btn-label').textContent = '⬇ Read from Radio';
+        btn.querySelector('.btn-label').textContent = '\u2B07 Read from Radio';
         hideProgress();
     }
 }
@@ -312,7 +510,7 @@ async function writeToRadio() {
 
     const btn = document.getElementById('btn-write');
     btn.disabled = true;
-    btn.querySelector('.btn-label').textContent = '⏳ Writing...';
+    btn.querySelector('.btn-label').textContent = '\u23F3 Writing...';
 
     showProgress('Writing EEPROM to radio...', 0, 0);
 
@@ -330,7 +528,7 @@ async function writeToRadio() {
         alert('Failed to write to radio: ' + e.message);
     } finally {
         btn.disabled = false;
-        btn.querySelector('.btn-label').textContent = '⬆ Write to Radio';
+        btn.querySelector('.btn-label').textContent = '\u2B06 Write to Radio';
         hideProgress();
     }
 }
@@ -402,7 +600,6 @@ async function importCSV(e) {
         }
 
         if (data.channels && data.channels.length > 0) {
-            // Replace entire channel list with imported data
             channels = data.channels;
             renderTable();
             alert(`Imported ${data.imported} channels.`);
