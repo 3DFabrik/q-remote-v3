@@ -365,6 +365,24 @@ async def api_import_csv(file: UploadFile = File(...), _=Depends(login_required)
         except (ValueError, KeyError) as e:
             errors.append(f"Row {row_idx + 1}: Parse error: {e}")
 
+    # Merge imported channels into cache so Write-to-Radio uses them
+    current = list(_get_channels())
+    if not current:
+        # No cache yet; create empty 200-slot list
+        current = [{"number": i+1, "name": "", "rxFreq": 0, "txOffset": 0,
+                    "offsetDir": "Off", "rxCode": 0, "txCode": 0,
+                    "rxCodeType": "None", "txCodeType": "None",
+                    "modulation": "FM", "bandwidth": "Wide", "power": "High",
+                    "step": "12.5kHz", "busyLock": False, "reverse": False,
+                    "pttId": "Off", "dtmf": False, "scramble": "Off",
+                    "compander": "Off", "scanlist": "None", "band": 15,
+                    "inUse": False} for i in range(NUM_CHANNELS)]
+    for ch in imported:
+        idx = ch["number"] - 1
+        if 0 <= idx < len(current):
+            current[idx] = ch
+    _set_channels(current)
+
     return {"imported": len(imported), "errors": errors, "channels": imported}
 
 
