@@ -83,15 +83,6 @@ function renderTable() {
             <td class="col-mod">${escHtml(ch.modulation)}</td>
             <td class="col-bw">${escHtml(ch.bandwidth)}</td>
             <td class="col-power">${escHtml(ch.power)}</td>
-            <td class="col-step">${escHtml(ch.step || '\u2014')}</td>
-            <td class="col-busylock">${ch.busyLock ? 'On' : 'Off'}</td>
-            <td class="col-reverse">${ch.reverse ? 'On' : 'Off'}</td>
-            <td class="col-pttid">${escHtml(ch.pttId || 'Off')}</td>
-            <td class="col-dtmf">${ch.dtmf ? 'On' : 'Off'}</td>
-            <td class="col-scramble">${escHtml(ch.scramble || 'Off')}</td>
-            <td class="col-compander">${escHtml(ch.compander || 'Off')}</td>
-            <td class="col-scanlist">${escHtml(ch.scanlist || 'None')}</td>
-            <td class="col-band">${ch.band !== undefined ? ch.band : '\u2014'}</td>
         </tr>
     `).join('');
 }
@@ -268,15 +259,6 @@ function bindEvents() {
             'col-mod': 'modulation',
             'col-bw': 'bandwidth',
             'col-power': 'power',
-            'col-step': 'step',
-            'col-busylock': 'busyLock',
-            'col-reverse': 'reverse',
-            'col-pttid': 'pttId',
-            'col-dtmf': 'dtmf',
-            'col-scramble': 'scramble',
-            'col-compander': 'compander',
-            'col-scanlist': 'scanlist',
-            'col-band': null,  // auto-calculated from frequency
         };
 
         for (const [cls, field] of Object.entries(fieldMap)) {

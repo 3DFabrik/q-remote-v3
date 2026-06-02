@@ -264,14 +264,6 @@
 .col-bw { min-width: 55px; }
 .col-power { min-width: 55px; }
 .col-band { min-width: 45px; }
-.col-step { min-width: 65px; }
-.col-busylock { min-width: 50px; }
-.col-reverse { min-width: 40px; }
-.col-pttid { min-width: 55px; }
-.col-dtmf { min-width: 45px; }
-.col-scramble { min-width: 70px; }
-.col-compander { min-width: 50px; }
-.col-scanlist { min-width: 65px; }
 
 /* ─── Inline Editing ─────────────────────────────────────────── */
 
