@@ -326,6 +326,18 @@ async def api_export_csv(_=Depends(login_required)):
     )
 
 
+def _empty_channel(num: int) -> dict:
+    return {"number": num, "rxFreq": 0, "inUse": False,
+            "name": "", "txOffset": 0, "offsetDir": "Off",
+            "rxCode": 0, "txCode": 0, "rxCodeType": "None",
+            "txCodeType": "None", "modulation": "FM",
+            "bandwidth": "Wide", "power": "High",
+            "step": "12.5kHz", "busyLock": False,
+            "reverse": False, "pttId": "Off", "dtmf": False,
+            "scramble": "Off", "compander": "Off",
+            "scanlist": "None", "band": 15}
+
+
 @stations_router.post("/api/stations/import/csv")
 async def api_import_csv(file: UploadFile = File(...), _=Depends(login_required)):
     """Import CSV file, validate, return parsed channels."""
@@ -372,6 +384,30 @@ async def api_import_csv(file: UploadFile = File(...), _=Depends(login_required)
 
         except (ValueError, KeyError) as e:
             errors.append(f"Row {row_idx + 1}: Parse error: {e}")
+
+    # Merge imported channels into cached channel list
+    # Channels NOT in CSV are zeroed out (deleted)
+    if imported:
+        imported_map = {ch["number"]: ch for ch in imported}
+        cached = _get_channels()
+        if cached and len(cached) == 200:
+            # Overwrite imported channels, zero out the rest
+            for i, ch in enumerate(cached):
+                num = ch["number"]
+                if num in imported_map:
+                    cached[i] = imported_map[num]
+                else:
+                    cached[i] = _empty_channel(num)
+            _set_channels(cached)
+        else:
+            # No cache yet - build full 200-channel list
+            full = []
+            for num in range(1, 201):
+                if num in imported_map:
+                    full.append(imported_map[num])
+                else:
+                    full.append(_empty_channel(num))
+            _set_channels(full)
 
     return {"imported": len(imported), "errors": errors, "channels": imported}
 
