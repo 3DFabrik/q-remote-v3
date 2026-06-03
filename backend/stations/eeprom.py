@@ -5,7 +5,7 @@ https://github.com/nicsure/QuanshengDock
 
 EEPROM Memory Layout:
   Data region:  0x0000–0x0C7F (3200 bytes) = 200 channels × 16 bytes
-  Attr region:  0x0D60–0x0E27 (200 bytes)  = 1 byte per channel
+  Attr region:  0x0D60–0x0E27 (200 bytes)  = 1 byte per channel (band 0-6=visible, 15=hidden)
   Names region: 0x0F50–0x1BCF (3200 bytes) = 200 names × 16 bytes
 
 Per-channel Data bytes (16 bytes):
@@ -42,10 +42,6 @@ DATA_SIZE = 3200        # 200 × 16
 
 ATTR_OFFSET = 0x0D60
 ATTR_SIZE = 200
-
-# Channel visibility flags: 0xFF = hidden, else = visible
-VIS_OFFSET = 0x0F00
-VIS_SIZE = 200
 
 NAMES_OFFSET = 0x0F50
 NAMES_SIZE = 3200        # 200 × 16
@@ -231,13 +227,13 @@ def pack_channel(ch: dict) -> tuple[bytes, bytes, int]:
 
     Produces byte-exact output matching Nicsure's layout.
     """
-    # Empty channels get filled with 0xFF (factory empty format)
-    # Detect by: rxFreq=0 OR rxFreq_raw was 0xFFFFFFFF (all-FF EEPROM)
+    # Empty channels: clear data+name to 0x00, set band=15 (Nicsure-style)
+    # Band 15 in attr byte tells firmware the channel is unused/hidden
     import struct
     rxFreq_raw = struct.unpack('<I', struct.pack('<I', int(round(ch.get("rxFreq", 0) * 100000))))[0]
     is_empty = (ch.get("rxFreq", 0) == 0) or (rxFreq_raw == 0xFFFFFFFF)
     if is_empty:
-        return b"\xff" * 16, b"\xff" * 16, 0xFF
+        return b"\x00" * 16, b"\x00" * 16, 0x0F
 
     data = bytearray(16)
 
@@ -348,13 +344,14 @@ def pack_channels(channels: list[dict]) -> tuple[bytes, bytes, bytes]:
 # ─── Region Helpers ───────────────────────────────────────────────
 
 def get_read_regions() -> list[tuple[int, int]]:
-    """Return list of (offset, length) tuples for reading EEPROM in chunks."""
+    """Return list of (offset, length) tuples for reading EEPROM in chunks.
+    
+    Reads exactly 3 regions like Nicsure's QuanshengDock:
+    Data -> Attr -> Names
+    """
     regions = []
     for off in range(0, DATA_SIZE, CHUNK_SIZE):
         regions.append((DATA_OFFSET + off, min(CHUNK_SIZE, DATA_SIZE - off)))
-    # Visibility flags
-    for off in range(0, VIS_SIZE, CHUNK_SIZE):
-        regions.append((VIS_OFFSET + off, min(CHUNK_SIZE, VIS_SIZE - off)))
     for off in range(0, ATTR_SIZE, CHUNK_SIZE):
         regions.append((ATTR_OFFSET + off, min(CHUNK_SIZE, ATTR_SIZE - off)))
     for off in range(0, NAMES_SIZE, CHUNK_SIZE):
@@ -362,33 +359,21 @@ def get_read_regions() -> list[tuple[int, int]]:
     return regions
 
 
-def get_write_regions(data: bytes, names: bytes, attrs: bytes, vis: bytes = None) -> list[tuple[int, bytes]]:
+def get_write_regions(data: bytes, names: bytes, attrs: bytes) -> list[tuple[int, bytes]]:
     """Return list of (offset, chunk_bytes) for writing EEPROM in chunks.
     
-    vis: visibility flags (200 bytes), 0xFF = channel hidden, else = visible.
-    If not provided, derived from channel data (empty channels get 0xFF).
-    """
-    if vis is None:
-        vis = bytearray(VIS_SIZE)
-        for i in range(VIS_SIZE):
-            # Check if channel is empty by looking at first 4 bytes of data
-            ch_data = data[i*16:(i+1)*16]
-            if ch_data == b"\xff" * 16:
-                vis[i] = 0xFF
-            else:
-                vis[i] = attrs[i] if i < len(attrs) else 0xFF
+    Writes exactly 3 regions like Nicsure's QuanshengDock:
+    Data -> Attr -> Names
     
+    Empty channels use: data=0x00, name=0x00, attr=0x0F (band=15 = hidden).
+    """
     regions = []
     for off in range(0, len(data), CHUNK_SIZE):
         regions.append((DATA_OFFSET + off, data[off:off + CHUNK_SIZE]))
     for off in range(0, len(attrs), CHUNK_SIZE):
         regions.append((ATTR_OFFSET + off, attrs[off:off + CHUNK_SIZE]))
-    # Write names BEFORE visibility (VIS overlaps with start of names region)
     for off in range(0, len(names), CHUNK_SIZE):
         regions.append((NAMES_OFFSET + off, names[off:off + CHUNK_SIZE]))
-    # Write visibility flags LAST so they take precedence over overlapping region
-    for off in range(0, len(vis), CHUNK_SIZE):
-        regions.append((VIS_OFFSET + off, vis[off:off + CHUNK_SIZE]))
     return regions
 
 
