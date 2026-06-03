@@ -5,7 +5,7 @@ https://github.com/nicsure/QuanshengDock
 
 EEPROM Memory Layout:
   Data region:  0x0000–0x0C7F (3200 bytes) = 200 channels × 16 bytes
-  Attr region:  0x0D60–0x0E27 (200 bytes)  = 1 byte per channel (band 0-6=visible, 15=hidden)
+  Attr region:  0x0D60–0x0E27 (200 bytes)  = 1 byte per channel (is_free=1 → hidden)
   Names region: 0x0F50–0x1BCF (3200 bytes) = 200 names × 16 bytes
 
 Per-channel Data bytes (16 bytes):
@@ -24,7 +24,8 @@ Attr byte per channel:
   bit 7    Scanlist1
   bit 6    Scanlist2
   bits 5-4 Compander
-  bits 3-0 Band
+  bit 3    IsFree (1=channel hidden/unused)
+  bits 2-0 Band (0-6)
 """
 
 import struct
@@ -73,7 +74,7 @@ OFFSET_DIR_REV = {v: k for k, v in OFFSET_DIR_MAP.items()}
 CODE_TYPE_MAP = {0: "None", 1: "CTCSS", 2: "DCS", 3: "ReverseDCS"}
 CODE_TYPE_REV = {v: k for k, v in CODE_TYPE_MAP.items()}
 
-POWER_MAP = {0: "High", 1: "Mid", 2: "Low"}
+POWER_MAP = {0: "Low", 1: "Mid", 2: "High"}
 POWER_REV = {v: k for k, v in POWER_MAP.items()}
 
 BANDWIDTH_MAP = {0: "Wide", 1: "Narrow"}
@@ -111,9 +112,11 @@ def _parse_name(name_bytes: bytes) -> str:
 
 
 def _freq_to_band(freq_mhz: float) -> int:
-    """Calculate band index from frequency in MHz (Nicsure-compatible)."""
+    """Calculate band index from frequency in MHz (UV-K5 compatible, 3-bit field).
+    Returns 0-6 for valid bands, 7 for empty/invalid.
+    """
     if freq_mhz == 0:
-        return 15  # Empty channel
+        return 7  # Empty channel
     hz = freq_mhz * 100000
     if hz < 10800000:
         return 0   # FM Broadcast
@@ -180,18 +183,19 @@ def parse_channel(channel_num: int, data: bytes, name: bytes, attr_byte: int) ->
     scrambleIdx = data[15]
     scramble = SCRAMBLE_MAP.get(scrambleIdx, f"Unknown({scrambleIdx})")
 
-    # Attr byte: Scanlist1(bit7) | Scanlist2(bit6) | Compander(bits 5-4) | Band(bits 3-0)
+    # Attr byte: Scanlist1(bit7) | Scanlist2(bit6) | Compander(bits 5-4) | IsFree(bit3) | Band(bits 2-0)
     scanlist1 = bool(attr_byte & 0x80)
     scanlist2 = bool(attr_byte & 0x40)
     scanlist = SCANLIST_MAP.get(
         (1 if scanlist1 else 0) | (2 if scanlist2 else 0), "None"
     )
     compander = COMPANDER_MAP.get((attr_byte >> 4) & 0x03, "Off")
-    band = attr_byte & 0x0F
+    is_free = bool(attr_byte & 0x08)
+    band = attr_byte & 0x07
 
-    # Channel is in use if it has a valid frequency
+    # Channel is in use if it has a valid frequency AND is not marked free
     # 0xFFFFFFFF (all 0xFF bytes) = empty/unused channel
-    inUse = rxFreq > 0 and rxFreq_raw != 0xFFFFFFFF
+    inUse = rxFreq > 0 and rxFreq_raw != 0xFFFFFFFF and not is_free
 
     return {
         "number": channel_num,
@@ -214,6 +218,7 @@ def parse_channel(channel_num: int, data: bytes, name: bytes, attr_byte: int) ->
         "scramble": scramble,
         "compander": compander,
         "scanlist": scanlist,
+        "is_free": is_free,
         "band": band,
         "inUse": inUse,
         # Store raw values for lossless roundtrip (list for JSON serialization)
@@ -227,8 +232,8 @@ def pack_channel(ch: dict) -> tuple[bytes, bytes, int]:
 
     Produces byte-exact output matching Nicsure's layout.
     """
-    # Empty channels: clear data+name to 0x00, set band=15 (Nicsure-style)
-    # Band 15 in attr byte tells firmware the channel is unused/hidden
+    # Empty channels: clear data+name to 0x00, set is_free=1 + band=7
+    # This matches CHIRP's attr layout: is_free(bit3)=1, band(bits2-0)=7
     import struct
     rxFreq_raw = struct.unpack('<I', struct.pack('<I', int(round(ch.get("rxFreq", 0) * 100000))))[0]
     is_empty = (ch.get("rxFreq", 0) == 0) or (rxFreq_raw == 0xFFFFFFFF)
@@ -295,19 +300,20 @@ def pack_channel(ch: dict) -> tuple[bytes, bytes, int]:
     else:
         name = _pack_name(ch.get("name", ""))
 
-    # Attr byte: reconstruct with band auto-calculated from frequency (Nicsure-compatible)
-    # Always recalculate band from rxFreq, preserve scanlist/compander from original
+    # Attr byte: Scanlist1(bit7) | Scanlist2(bit6) | Compander(bits 5-4) | IsFree(bit3) | Band(bits 2-0)
+    # For empty channels: is_free=1, band=7 (max 3-bit value = unused marker)
+    # For active channels: is_free=0, band=0-6 (auto-calculated from freq)
     rxFreq = ch.get("rxFreq", 0)
-    band = _freq_to_band(rxFreq)
+    is_empty = (rxFreq == 0)
+    band = 7 if is_empty else _freq_to_band(rxFreq)
+    is_free = 1 if is_empty else 0
 
-    # Always use parsed fields for scanlist and compander
-    # (user edits change ch["scanlist"]/ch["compander"], not _raw_attr)
     scanlist = SCANLIST_REV.get(ch.get("scanlist", "None"), 0)
     compander = COMPANDER_REV.get(ch.get("compander", "Off"), 0)
     scanlist1 = bool(scanlist & 1)
     scanlist2 = bool(scanlist & 2)
 
-    attr_byte = ((1 if scanlist1 else 0) << 7) | ((1 if scanlist2 else 0) << 6) | (compander << 4) | (band & 0x0F)
+    attr_byte = ((1 if scanlist1 else 0) << 7) | ((1 if scanlist2 else 0) << 6) | (compander << 4) | (is_free << 3) | (band & 0x07)
 
     return bytes(data), name, attr_byte
 
