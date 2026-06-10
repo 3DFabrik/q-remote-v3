@@ -299,6 +299,11 @@ class RadioConnection:
     def request_screen(self):
         self.send_command(Packet.GET_SCREEN, 0x12345678)
 
+    def reset_radio(self):
+        """Send RESET command (0x05DD) to reboot the radio MCU."""
+        self.send_command(Packet.RESET, 0x12345678)
+        log.info("Radio reset command sent")
+
     def _rssi_poll_loop(self):
         """No-op placeholder – frequency is read on demand via read_frequency()."""
         log.info("RSSI poll loop idle (no continuous polling)")

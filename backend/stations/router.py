@@ -111,6 +111,13 @@ async def _eeprom_read_task(task_id: str):
         c = channels[i] if i < len(channels) else {}
         logger.info(f"  Ch{i}: data={bytes(d).hex()} name={bytes(n).hex()} attr={a} inUse={c.get("inUse")} freq={c.get("rxFreq")} name_str={c.get("name")}")
     
+    # Dump all attr bytes summary
+    attr_summary = {}
+    for i in range(NUM_CHANNELS):
+        a = attr_buf[i] if i < len(attr_buf) else -1
+        attr_summary[a] = attr_summary.get(a, 0) + 1
+    logger.info(f"  Attr summary: {dict(sorted(attr_summary.items()))}")
+
     _set_channels(channels)
 
     _tasks[task_id]["status"] = "completed"
@@ -164,6 +171,14 @@ async def _eeprom_write_task(task_id: str, data: bytes, names: bytes, attrs: byt
         logger.info("EEPROM write: exiting eeprom mode")
         radio.exit_eeprom_mode()
         logger.info("EEPROM write: eeprom mode exited")
+
+    # Reset radio MCU so firmware reloads gMR_ChannelAttributes from EEPROM
+    logger.info("EEPROM write: resetting radio to reload channel attributes")
+    import time
+    time.sleep(1)  # wait for remote UI to fully re-engage
+    radio.reset_radio()
+    time.sleep(3)  # wait for MCU reboot and reconnect
+    logger.info("EEPROM write: radio reset complete")
 
     _tasks[task_id]["status"] = "completed"
     _tasks[task_id]["result"] = {"backup_id": backup_id}
@@ -449,6 +464,13 @@ async def api_restore_backup(backup_id: str, _=Depends(login_required)):
 
     data, names, attrs = result
     channels = parse_eeprom(data, names, attrs)
+    # Dump all attr bytes summary
+    attr_summary = {}
+    for i in range(NUM_CHANNELS):
+        a = attr_buf[i] if i < len(attr_buf) else -1
+        attr_summary[a] = attr_summary.get(a, 0) + 1
+    logger.info(f"  Attr summary: {dict(sorted(attr_summary.items()))}")
+
     _set_channels(channels)
 
     return {
@@ -474,5 +496,12 @@ async def api_update_channel(request: Request, _=Depends(login_required)):
         raise HTTPException(status_code=400, detail=", ".join(ch_errors))
 
     channels[ch_num - 1] = body
+    # Dump all attr bytes summary
+    attr_summary = {}
+    for i in range(NUM_CHANNELS):
+        a = attr_buf[i] if i < len(attr_buf) else -1
+        attr_summary[a] = attr_summary.get(a, 0) + 1
+    logger.info(f"  Attr summary: {dict(sorted(attr_summary.items()))}")
+
     _set_channels(channels)
     return {"ok": True}

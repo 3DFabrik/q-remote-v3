@@ -232,11 +232,11 @@ def pack_channel(ch: dict) -> tuple[bytes, bytes, int]:
 
     Produces byte-exact output matching Nicsure's layout.
     """
-    # Empty channels: clear data+name to 0x00, set is_free=1 + band=7
+    # Empty channels (inUse=False): clear data+name to 0x00, attr=0x0F (band=15 → firmware skips)
     # This matches CHIRP's attr layout: is_free(bit3)=1, band(bits2-0)=7
     import struct
     rxFreq_raw = struct.unpack('<I', struct.pack('<I', int(round(ch.get("rxFreq", 0) * 100000))))[0]
-    is_empty = (ch.get("rxFreq", 0) == 0) or (rxFreq_raw == 0xFFFFFFFF)
+    is_empty = not ch.get("inUse", False)
     if is_empty:
         return b"\x00" * 16, b"\x00" * 16, 0x0F
 
@@ -304,7 +304,7 @@ def pack_channel(ch: dict) -> tuple[bytes, bytes, int]:
     # For empty channels: is_free=1, band=7 (max 3-bit value = unused marker)
     # For active channels: is_free=0, band=0-6 (auto-calculated from freq)
     rxFreq = ch.get("rxFreq", 0)
-    is_empty = (rxFreq == 0)
+    is_empty = not ch.get("inUse", False)
     band = 7 if is_empty else _freq_to_band(rxFreq)
     is_free = 1 if is_empty else 0
 
