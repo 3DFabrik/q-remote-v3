@@ -14,10 +14,6 @@ Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmwa
 
 ![TX MOD Meter](docs/screenshot-tx-mod.jpg)
 
-*Stations editor – full channel management:*
-
-![Stations Editor](docs/screenshot-stations.jpg)
-
 *Admin panel – user management:*
 
 ![Admin Panel](docs/screenshot-admin.jpg)
