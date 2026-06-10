@@ -464,12 +464,6 @@ async def api_restore_backup(backup_id: str, _=Depends(login_required)):
 
     data, names, attrs = result
     channels = parse_eeprom(data, names, attrs)
-    # Dump all attr bytes summary
-    attr_summary = {}
-    for i in range(NUM_CHANNELS):
-        a = attr_buf[i] if i < len(attr_buf) else -1
-        attr_summary[a] = attr_summary.get(a, 0) + 1
-    logger.info(f"  Attr summary: {dict(sorted(attr_summary.items()))}")
 
     _set_channels(channels)
 
@@ -496,12 +490,6 @@ async def api_update_channel(request: Request, _=Depends(login_required)):
         raise HTTPException(status_code=400, detail=", ".join(ch_errors))
 
     channels[ch_num - 1] = body
-    # Dump all attr bytes summary
-    attr_summary = {}
-    for i in range(NUM_CHANNELS):
-        a = attr_buf[i] if i < len(attr_buf) else -1
-        attr_summary[a] = attr_summary.get(a, 0) + 1
-    logger.info(f"  Attr summary: {dict(sorted(attr_summary.items()))}")
 
     _set_channels(channels)
     return {"ok": True}
