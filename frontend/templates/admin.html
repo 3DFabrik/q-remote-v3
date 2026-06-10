@@ -152,7 +152,7 @@
                 {% for username, data in users.items() %}
                 <tr>
                     <form method="POST" action="/admin/users">
-                        <td><strong>{% if username == "df7zz" %}{{ username }}{% else %}{{ username[:2] }}{{ "*" * (username|length - 2) }}{% endif %}</strong> {% if data.admin %}<span class="badge">ADMIN</span>{% endif %}</td>
+                        <td><strong>{{ username }}</strong> {% if data.admin %}<span class="badge">ADMIN</span>{% endif %}</td>
                         <td><input type="password" name="edit_password" placeholder="••••••" autocomplete="off"></td>
                         <td><input type="checkbox" name="edit_admin" {% if data.admin %}checked{% endif %}></td>
                         <td>
@@ -161,7 +161,7 @@
                             <input type="hidden" name="del_username" value="{{ username }}">
                             <button type="submit" class="btn btn-save">SAVE</button>
                             {% if username != current_user %}
-                            <button type="submit" class="btn btn-delete" onclick="this.form.action='/admin/users';this.form.elements.action.value='delete';this.form.elements.del_username.value='{{ username }}';return confirm('Delete this user?')">DEL</button>
+                            <button type="submit" class="btn btn-delete" onclick="this.form.action='/admin/users';this.form.elements.action.value='delete';this.form.elements.del_username.value='{{ username }}';return confirm('Delete {{ username }}?')">DEL</button>
                             {% endif %}
                         </td>
                     </form>
