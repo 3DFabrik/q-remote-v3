@@ -1,6 +1,8 @@
 # Q-Remote V3 🤖📻
 
-Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmware. Access your radio from anywhere through the browser – full-duplex audio, live display, complete control, and a full channel editor.
+Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmware. Access your radio from anywhere through the browser – live display, complete control, and a full channel editor.
+
+> **Special thanks to [Nic Sure](https://github.com/nicsure) for the amazing [QuanshengDock](https://github.com/nicsure/QuanshengDock) project – the firmware, protocol documentation, and C# reference implementation that made Q-Remote V3 possible. Without this foundational work, none of this would exist. 🙏
 
 ![Q-Remote V3 Screenshot](docs/screenshot.jpg)
 
@@ -28,6 +30,7 @@ Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmwa
 - **PTT (Push-to-Talk)** – Hold to transmit, with TX lock for multi-user safety
 - **Analog S-Meter** – Real-time signal strength needle with continuous dBm mapping
 - **Mic Modulation Meter** – dBFS level display during transmit (MOD scale)
+- **Squelch Control** – Adjustable squelch threshold with audio gating
 
 **Stations Editor**
 - **Full Channel Management** – Read/write all 200 channels directly from the radio EEPROM
@@ -43,8 +46,6 @@ Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmwa
 - **PTT Locking** – Only one user can transmit at a time
 
 ### 🔧 In Progress
-- Squelch control
-- Side keys (KEY1/KEY2)
 - Spectrum bandscope (SCAN protocol 0x0808 working, UI pending)
 
 ## Architecture
