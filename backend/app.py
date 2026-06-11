@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from jinja2 import Environment, FileSystemLoader
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -23,6 +23,7 @@ from backend.stations.router import stations_router
 from backend.auth import (
     SECRET_KEY, USERS, load_users, save_users, log_activity,
     get_current_user, get_ws_user, is_admin, login_required, admin_required,
+    touch_activity, clear_activity, check_timeout, parse_timeout, get_user_timeout_minutes,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,17 +41,14 @@ jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=
 async def lifespan(app: FastAPI):
     load_config()
     setup_logging()
-    # Refresh users from file on startup
     load_users()
     logger.info("Q-Remote V3 starting up")
 
-    r = init_radio()  # radio obj is at _sio_mod.radio
-    connected = r.connect()  # blocking V1-style connect
+    r = init_radio()
+    connected = r.connect()
     if connected:
         logger.info("Radio connected")
-        # Start RX audio pipeline
         rx_audio.start(asyncio.get_event_loop())
-        # Load squelch settings from config
         try:
             rx_audio.squelch_enabled = get("audio.squelch_enabled", True)
             rx_audio.squelch_threshold = get("audio.squelch_threshold", 300)
@@ -72,11 +70,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Q-Remote V3", version="3.0.0", lifespan=lifespan)
 
-# Session middleware for cookie-based auth
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
@@ -84,10 +82,10 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         return RedirectResponse(url="/login", status_code=303)
     return HTMLResponse(f"<h1>{exc.status_code}</h1><p>{exc.detail}</p>", status_code=exc.status_code)
 
+
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
 
-# Stations Editor module
 app.include_router(stations_router)
 
 import socketio as sio_module
@@ -110,6 +108,35 @@ async def get_status():
     return {"state": "connected"}
 
 
+# ─── Heartbeat & Tab-Close ─────────────────────────────────────────
+
+@app.post("/api/heartbeat")
+async def heartbeat(request: Request):
+    """Keep session alive while tab is open. Returns session status."""
+    user = get_current_user(request)
+    if not user:
+        return JSONResponse({"status": "expired"}, status_code=401)
+    if check_timeout(user):
+        request.session.pop("user", None)
+        clear_activity(user)
+        log_activity(user, "TIMEOUT_LOGOUT")
+        return JSONResponse({"status": "expired"}, status_code=401)
+    touch_activity(user)
+    timeout_min = get_user_timeout_minutes(user) if user else 0
+    return {"status": "ok", "timeout_minutes": timeout_min}
+
+
+@app.post("/api/close")
+async def tab_close(request: Request):
+    """Called on beforeunload – logout user when tab closes."""
+    user = request.session.get("user")
+    request.session.clear()
+    if user:
+        clear_activity(user)
+        log_activity(user, "TAB_CLOSE_LOGOUT")
+    return {"status": "ok"}
+
+
 # ─── Auth Routes ───────────────────────────────────────────────────
 
 @app.get("/login", response_class=HTMLResponse)
@@ -128,6 +155,7 @@ async def login_submit(request: Request):
     user_data = USERS.get(username, {})
     if user_data.get("password") == password:
         request.session["user"] = username
+        touch_activity(username)
         log_activity(username, "LOGIN")
         return RedirectResponse(url="/", status_code=303)
     return HTMLResponse(jinja_env.get_template("login.html").render(request=request, error="Ungültige Anmeldedaten"))
@@ -135,8 +163,10 @@ async def login_submit(request: Request):
 
 @app.get("/logout")
 async def logout(request: Request):
-    user = request.session.pop("user", None)
+    user = request.session.get("user")
+    request.session.clear()
     if user:
+        clear_activity(user)
         log_activity(user, "LOGOUT")
     return RedirectResponse(url="/login", status_code=303)
 
@@ -161,8 +191,14 @@ async def admin_update_users(request: Request, _=Depends(admin_required)):
         username = form.get("new_username", "").strip()
         password = form.get("new_password", "").strip()
         admin = form.get("new_admin") == "on"
+        timeout = form.get("new_timeout", "02:00").strip()
+        # Validate timeout format
+        try:
+            parse_timeout(timeout)
+        except Exception:
+            timeout = "02:00"
         if username and password and username not in USERS:
-            USERS[username] = {"password": password, "admin": admin}
+            USERS[username] = {"password": password, "admin": admin, "timeout": timeout}
             save_users()
             log_activity(get_current_user(request), "ADD_USER", f"user={username}")
 
@@ -170,10 +206,17 @@ async def admin_update_users(request: Request, _=Depends(admin_required)):
         username = form.get("edit_username", "").strip()
         password = form.get("edit_password", "").strip()
         admin = form.get("edit_admin") == "on"
+        timeout = form.get("edit_timeout", "").strip()
         if username in USERS:
             if password:
                 USERS[username]["password"] = password
             USERS[username]["admin"] = admin
+            if timeout:
+                try:
+                    parse_timeout(timeout)
+                    USERS[username]["timeout"] = timeout
+                except Exception:
+                    pass
             save_users()
             log_activity(get_current_user(request), "EDIT_USER", f"user={username}")
 
@@ -215,7 +258,8 @@ async def serve_index(request: Request):
         return RedirectResponse(url="/login", status_code=303)
     html = (FRONTEND_DIR / "index.html").read_text()
     is_user_admin = USERS.get(user, {}).get("admin", False)
-    user_json = json.dumps({"name": user, "admin": is_user_admin})
+    timeout_min = get_user_timeout_minutes(user) if user else 0
+    user_json = json.dumps({"name": user, "admin": is_user_admin, "timeout_minutes": timeout_min})
     inject = f'<script>window.CURRENT_USER = {user_json};</script>'
     html = html.replace("</head>", inject + "</head>", 1)
     return HTMLResponse(content=html)
@@ -225,12 +269,14 @@ async def serve_index(request: Request):
 
 @app.websocket("/audio/rx")
 async def audio_rx_ws(websocket: WebSocket):
-    """Raw WebSocket for RX audio stream (μ-law bytes)."""
-    # Auth check: read session cookie
     user = get_ws_user(websocket)
     if not user:
         await websocket.close(code=4001, reason="Not authenticated")
         return
+    if check_timeout(user):
+        await websocket.close(code=4001, reason="Session expired")
+        return
+    touch_activity(user)
 
     await websocket.accept()
     logger.info(f"RX audio WebSocket client connected (user={user})")
@@ -249,12 +295,14 @@ async def audio_rx_ws(websocket: WebSocket):
 
 @app.websocket("/audio/tx")
 async def audio_tx_ws(websocket: WebSocket):
-    """Raw WebSocket for TX audio stream (browser mic → μ-law → aplay)."""
-    # Auth check: read session cookie
     user = get_ws_user(websocket)
     if not user:
         await websocket.close(code=4001, reason="Not authenticated")
         return
+    if check_timeout(user):
+        await websocket.close(code=4001, reason="Session expired")
+        return
+    touch_activity(user)
 
     await websocket.accept()
     logger.info(f"TX audio WebSocket client connected (user={user})")
@@ -291,7 +339,6 @@ async def set_squelch(request: Request, _=Depends(admin_required)):
     threshold = max(10, min(10000, threshold))
     rx_audio.squelch_enabled = enabled
     rx_audio.squelch_threshold = threshold
-    # Persist to config
     cfg_path = Path(__file__).parent.parent / "config.local.yaml"
     import yaml
     cfg = {}

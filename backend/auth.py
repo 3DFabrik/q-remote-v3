@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -11,13 +12,17 @@ from starlette.responses import RedirectResponse
 
 # ─── Config ────────────────────────────────────────────────────────
 
-SECRET_KEY = "q-remote-v3-secret-change-me"
+SECRET_KEY = "q-remo…e-me"
 USER_FILE = Path(__file__).parent.parent / "users.json"
 LOG_DIR = Path(__file__).parent.parent / "logs"
 
 USERS: dict = {}
 
-# ─── Activity Logging ──────────────────────────────────────────────
+# ─── Session Timeout Tracking ──────────────────────────────────────
+
+_session_activity: dict[str, float] = {}  # username -> last activity timestamp (epoch)
+
+DEFAULT_TIMEOUT_MINUTES = 120  # 2 hours default
 
 activity_log = logging.getLogger("activity")
 
@@ -49,6 +54,10 @@ def load_users():
                     USERS[k] = v
     else:
         USERS = {}
+    # Ensure timeout field exists for all users (default: 02:00 = 2 hours)
+    for username, data in USERS.items():
+        if "timeout" not in data:
+            data["timeout"] = "02:00"
 
 
 def save_users():
@@ -61,12 +70,11 @@ def get_current_user(request: Request) -> Optional[str]:
     return request.session.get("user")
 
 
-
-
 def get_ws_user(websocket) -> Optional[str]:
     """Get the currently logged-in username from a WebSocket session scope."""
     session = websocket.scope.get("session", {})
     return session.get("user")
+
 
 def is_admin(request: Request) -> bool:
     """Check if the current user is an admin."""
@@ -74,18 +82,76 @@ def is_admin(request: Request) -> bool:
     return bool(user and USERS.get(user, {}).get("admin", False))
 
 
+# ─── Timeout Helpers ───────────────────────────────────────────────
+
+
+def parse_timeout(timeout_str: str) -> int:
+    """Parse 'HH:MM' timeout string to minutes. Returns 0 for no timeout."""
+    if not timeout_str or timeout_str == "00:00":
+        return 0
+    try:
+        parts = timeout_str.split(":")
+        return int(parts[0]) * 60 + int(parts[1])
+    except (ValueError, IndexError):
+        return DEFAULT_TIMEOUT_MINUTES
+
+
+def get_user_timeout_minutes(username: str) -> int:
+    """Get timeout in minutes for a user. 0 = no timeout."""
+    user_data = USERS.get(username, {})
+    timeout_str = user_data.get("timeout", "02:00")
+    return parse_timeout(timeout_str)
+
+
+def touch_activity(username: str):
+    """Update last activity timestamp for a user."""
+    if username:
+        _session_activity[username] = time.time()
+
+
+def check_timeout(username: str) -> bool:
+    """Check if user's session has timed out. Returns True if timed out."""
+    if not username:
+        return True
+    timeout_minutes = get_user_timeout_minutes(username)
+    if timeout_minutes == 0:
+        return False  # No timeout
+    last = _session_activity.get(username)
+    if last is None:
+        return False  # No activity recorded yet (fresh login)
+    elapsed = time.time() - last
+    return elapsed > (timeout_minutes * 60)
+
+
+def clear_activity(username: str):
+    """Remove activity tracking for a user (on logout)."""
+    _session_activity.pop(username, None)
+
+
 # ─── FastAPI Dependencies ──────────────────────────────────────────
 
 
 async def login_required(request: Request):
-    """Redirect to /login if not authenticated."""
+    """Redirect to /login if not authenticated or session timed out."""
     user = get_current_user(request)
     if not user:
-        # For API/WebSocket requests, return 401
         accept = request.headers.get("accept", "")
         if "text/html" not in accept:
             raise HTTPException(status_code=401, detail="Not authenticated")
         return RedirectResponse(url="/login", status_code=303)
+
+    # Check timeout
+    if check_timeout(user):
+        request.session.pop("user", None)
+        clear_activity(user)
+        log_activity(user, "TIMEOUT_LOGOUT")
+        accept = request.headers.get("accept", "")
+        if "text/html" not in accept:
+            raise HTTPException(status_code=401, detail="Session expired")
+        return RedirectResponse(url="/login", status_code=303)
+
+    # Touch activity on valid request
+    touch_activity(user)
     return user
 
 
@@ -94,11 +160,18 @@ async def admin_required(request: Request):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
+
+    if check_timeout(user):
+        request.session.pop("user", None)
+        clear_activity(user)
+        log_activity(user, "TIMEOUT_LOGOUT")
+        raise HTTPException(status_code=401, detail="Session expired")
+
     if not USERS.get(user, {}).get("admin", False):
         raise HTTPException(status_code=403, detail="Admin access required")
+
+    touch_activity(user)
     return user
-
-
 
 
 # ─── Init ──────────────────────────────────────────────────────────

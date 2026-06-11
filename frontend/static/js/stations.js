@@ -664,3 +664,51 @@ window.restoreBackup = async function(backupId) {
         alert('Restore failed: ' + e.message);
     }
 };
+
+// ─── Session Timeout & Heartbeat ──────────────────────────────
+
+(function setupSessionManagement() {
+    const HEARTBEAT_INTERVAL = 60 * 1000;  // 1 minute
+
+    // Heartbeat to keep session alive
+    setInterval(async () => {
+        try {
+            const resp = await fetch("/api/heartbeat", { method: "POST" });
+            if (resp.status === 401) {
+                window.location.href = "/login";
+            }
+        } catch (e) {
+            console.warn("Heartbeat failed:", e);
+        }
+
+// ─── Session Timeout & Heartbeat ──────────────────────────────
+
+(function setupSessionManagement() {
+    const HEARTBEAT_INTERVAL = 60 * 1000;
+
+    setInterval(async () => {
+        try {
+            const resp = await fetch("/api/heartbeat", { method: "POST" });
+            if (resp.status === 401) {
+                window.location.href = "/login";
+            }
+        } catch (e) {
+            console.warn("Heartbeat failed:", e);
+        }
+    }, HEARTBEAT_INTERVAL);
+
+    // Tab close → logout (only on actual window close, not navigation)
+    let _navigating = false;
+    document.addEventListener("click", (e) => {
+        const link = e.target.closest("a[href]");
+        if (link) _navigating = true;
+    });
+    document.addEventListener("submit", () => { _navigating = true; });
+
+    window.addEventListener("beforeunload", () => {
+        if (!_navigating) {
+            navigator.sendBeacon("/api/close");
+        }
+        _navigating = false;
+    });
+})();

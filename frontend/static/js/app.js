@@ -31,6 +31,64 @@ txAudio.onMicLevel = (rms) => {
     }
 };
 
+// ─── Session Timeout & Heartbeat ────────────────────────────────
+
+const HEARTBEAT_INTERVAL = 60 * 1000;  // 1 minute
+let _heartbeatTimer = null;
+
+function startHeartbeat() {
+    if (_heartbeatTimer) clearInterval(_heartbeatTimer);
+    _heartbeatTimer = setInterval(async () => {
+        try {
+            const resp = await fetch("/api/heartbeat", { method: "POST" });
+            if (resp.status === 401) {
+                window.location.href = "/login";
+            }
+        } catch (e) {
+            console.warn("Heartbeat failed:", e);
+        }
+    }, HEARTBEAT_INTERVAL);
+}
+
+// Tab close → logout (only on actual window/tab close, NOT navigation)
+function setupTabCloseLogout() {
+    let _navigating = false;
+
+    // Track clicks on links
+    document.addEventListener("click", (e) => {
+        const link = e.target.closest("a[href]");
+        if (link) _navigating = true;
+    });
+    // Track form submissions
+    document.addEventListener("submit", () => { _navigating = true; });
+
+    window.addEventListener("beforeunload", () => {
+        if (!_navigating) {
+            // Only send close beacon on actual tab/window close
+            navigator.sendBeacon("/api/close");
+        }
+        _navigating = false;
+    });
+}
+
+// Global 401 handler
+function setupGlobal401Handler() {
+    const origFetch = window.fetch;
+    window.fetch = async function (...args) {
+        const resp = await origFetch.apply(this, args);
+        if (resp.status === 401) {
+            const url = typeof args[0] === "string" ? args[0] : args[0]?.url || "";
+            if (url.includes("/api/")) {
+                window.location.href = "/login";
+            }
+        }
+        return resp;
+    };
+}
+
+// ─── End Session Timeout ────────────────────────────────────────
+
+
 async function init() {
     console.log("Q-Remote V3 starting...");
 
@@ -68,17 +126,13 @@ async function init() {
         }, 50);
     };
 
-    // Continuous dBm → s_raw mapping: 6dB per S-unit (S1=-121, S9=-73)
-    // s_raw: 0=S0, 1=S1, ..., 9=S9, 10=S9+10, ..., 15=S9+60
     function dbmToSraw(dbm) {
         if (dbm <= -121) return 0;
         if (dbm >= -13) return 15;
-        // S1 (-121) to S9 (-73): 8 steps over 48dB = 6dB per S-unit
         if (dbm <= -73) {
             return 1 + (dbm - (-121)) / 6;
         }
-        // Over S9: -73 to -13 = 60dB over 6 steps = 10dB per step
-        return 9 + (-73 - dbm) / (-10);  // Each 10dB = 1 step
+        return 9 + (-73 - dbm) / (-10);
     }
 
     control.onRssiUpdate = (dbm, sUnit, sRaw) => {
@@ -90,13 +144,12 @@ async function init() {
         state.pttActive = active;
         if (active) {
             pttBtn.classList.add("active");
-            // Don't set static TX level – mic meter will drive the needle
             smeter.isTX = true;
             smeter.targetAngle = 0;
             smeter.draw();
         } else {
             pttBtn.classList.remove("active");
-            smeter.setRX(0);  // Reset to S0
+            smeter.setRX(0);
         }
     };
 
@@ -104,9 +157,12 @@ async function init() {
     setupButtons();
     setupPTT();
     setupAudioToggle();
-
-    // Auto-start audio on load
     startAudio();
+
+    // Session management
+    setupTabCloseLogout();
+    setupGlobal401Handler();
+    startHeartbeat();
 }
 
 function setupButtons() {

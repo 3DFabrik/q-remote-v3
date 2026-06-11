@@ -14,11 +14,11 @@ Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmwa
 
 ![TX MOD Meter](docs/screenshot-tx-mod.jpg)
 
-*Stations editor – full channel management:*
+*Stations editor – full channel management with squelch control:*
 
 ![Stations Editor](docs/screenshot-stations.jpg)
 
-*Admin panel – user management:*
+*Admin panel – user management with per-user session timeout:*
 
 ![Admin Panel](docs/screenshot-admin.jpg)
 
@@ -44,10 +44,16 @@ Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmwa
 - **Empty Channel Handling** – Empty channels are correctly hidden from the radio's channel scan
 - **Auto-Reset After Write** – Radio MCU resets automatically after EEPROM write to reload channel data
 
-**Multi-User & Admin**
+**Multi-User & Security**
 - **Login System** – Multi-user authentication with admin panel
-- **User Management** – Add/remove users, activity logs
+- **User Management** – Add/remove users, set admin privileges
+- **Per-User Session Timeout** – Configurable inactivity timeout (HH:MM) per user via admin panel
+  - Default: 2 hours, set to `00:00` for unlimited sessions
+  - Automatic logout on timeout with redirect to login screen
+  - Tab/window close triggers immediate logout
+  - Activity tracking across all pages (radio control, station editor, admin panel)
 - **PTT Locking** – Only one user can transmit at a time
+- **Activity Logging** – Login, logout, timeout, PTT events tracked in activity log
 
 ### 🔧 In Progress
 - Spectrum bandscope (SCAN protocol 0x0808 working, UI pending)
@@ -104,9 +110,9 @@ Open `https://your-pi:8080` in your browser. **HTTPS is required** for microphon
 ```
 q-remote-v3/
 ├── backend/
-│   ├── app.py              # FastAPI app, routes, audio WebSockets
+│   ├── app.py              # FastAPI app, routes, audio WebSockets, heartbeat API
 │   ├── config.py           # YAML config loader
-│   ├── auth.py             # User auth, session management
+│   ├── auth.py             # User auth, session management, timeout tracking
 │   ├── radio/
 │   │   ├── connection.py   # Serial protocol, radio communication, EEPROM access
 │   │   ├── protocol.py     # Packet building & parsing (XOR + CRC16)
@@ -124,15 +130,15 @@ q-remote-v3/
 │   ├── static/
 │   │   ├── css/style.css   # Instrument-panel theme
 │   │   └── js/
-│   │       ├── app.js      # Main app, audio toggle, PTT
+│   │       ├── app.js      # Main app, audio toggle, PTT, session heartbeat
 │   │       ├── control.js  # SocketIO client
 │   │       ├── display.js  # Canvas LCD renderer
 │   │       ├── smeter.js   # Analog S-Meter + MOD meter
 │   │       ├── audio.js    # RX audio (μ-law decode)
 │   │       ├── tx_audio.js # TX audio (mic → μ-law encode)
-│   │       └── stations.js # Stations editor frontend
+│   │       └── stations.js # Stations editor frontend + session management
 │   └── templates/
-│       ├── admin.html      # User management
+│       ├── admin.html      # User management + timeout settings
 │       ├── admin_logs.html # Activity logs
 │       ├── login.html      # Login page
 │       └── stations.html   # Channel editor

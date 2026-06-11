@@ -14,7 +14,7 @@ import socketio
 from backend.radio.connection import RadioConnection
 from backend.radio.protocol import Packet
 from backend.radio.lcd import LCDDisplay
-from backend.auth import USERS, SECRET_KEY, log_activity
+from backend.auth import USERS, SECRET_KEY, log_activity, touch_activity, check_timeout, clear_activity
 
 logger = logging.getLogger(__name__)
 
@@ -30,30 +30,20 @@ lcd: Optional[LCDDisplay] = None
 _ptt_owner: Optional[str] = None
 _sid_users: dict = {}  # sid -> username
 _ptt_drain_task: Optional[asyncio.Task] = None
-_PTT_DRAIN_DELAY = 0.8   # seconds to wait before releasing PTT
+_PTT_DRAIN_DELAY = 0.8
 
-# RSSI smoothing state: running average of raw register values
 _rssi_raw_history = []
 _RSSI_HISTORY_LEN = 10
 
 
 def _get_user_from_environ(environ: dict) -> Optional[str]:
     """Extract username from session cookie in SocketIO environ."""
-    from starlette.requests import Request
-    from http.cookies import SimpleCookie
-
-    cookie_str = environ.get('HTTP_COOKIE', '')
-    if not cookie_str:
-        return None
-
-    # Use starlette's SessionMiddleware to decode the session
-    # We need to decode the signed cookie manually
     try:
         from starlette.middleware.sessions import SessionMiddleware
         import itsdangerous
         signer = itsdangerous.TimestampSigner(SECRET_KEY)
         cookie = SimpleCookie()
-        cookie.load(cookie_str)
+        cookie.load(environ.get('HTTP_COOKIE', ''))
         session_cookie = cookie.get('session')
         if session_cookie:
             data = signer.unsign(session_cookie.value, max_age=None)
@@ -70,7 +60,6 @@ def init_radio():
     radio = RadioConnection()
     lcd = LCDDisplay()
 
-    # LCD change callback -> broadcast lcd_update to clients
     def on_lcd_change(state):
         logger.info(f"LCD change callback fired!")
         if radio._loop:
@@ -82,21 +71,15 @@ def init_radio():
 
     lcd.on_change(on_lcd_change)
 
-    # Wire radio UI callback to LCD
     async def handle_ui(ui_type, val1, val2, val3, data_len, data):
         lcd.process_ui_packet(ui_type, val1, val2, val3, data_len, data)
-        # Only flush after type 6 (status) – end of display frame
         if ui_type == 6:
             lcd.flush()
-            # Check RSSI timeout – if no display text for 3s, reset
             lcd.check_rssi_timeout()
-            # Emit RSSI (including s_raw=0 when timed out)
             if lcd.rssi == -120:
                 await sio.emit('rssi', {'dbm': -120})
             else:
-                # Send raw dBm – frontend does continuous S-unit mapping
                 dbm = lcd.rssi
-                # Determine s_unit label for text display
                 if dbm <= -121: s_unit = "S0"
                 elif dbm <= -115: s_unit = "S1"
                 elif dbm <= -109: s_unit = "S2"
@@ -134,12 +117,10 @@ async def _emit_lcd(state):
 
 
 async def _on_rssi(raw_data):
-    """RSSI from GET_RSSI - always returns garbage (-156), ignore."""
     pass
 
 
 def _raw_to_s_raw(rssi_raw):
-    """Convert raw BK4819 register value to S-unit (0-15)."""
     if rssi_raw <= 122: return 0
     elif rssi_raw < 170:
         return min(9, 1 + int((rssi_raw - 122) / 5.3))
@@ -152,8 +133,6 @@ def _raw_to_s_raw(rssi_raw):
 
 
 async def _on_register(reg, val):
-    """Register value from radio - BK4819 RSSI via register 0x67.
-    Disabled: register values are unreliable, using display-text RSSI instead."""
     pass
 
 
@@ -171,19 +150,23 @@ async def _on_radio_disconnect():
 
 @sio.event
 async def connect(sid, environ):
-    # Auth check: verify session cookie
     user = _get_user_from_environ(environ)
     if not user:
         logger.warning(f"SocketIO connect rejected (no session): {sid}")
-        return False  # Reject connection
+        return False
+
+    # Check timeout
+    if check_timeout(user):
+        logger.warning(f"SocketIO connect rejected (session expired): {sid} user={user}")
+        return False
 
     logger.info(f"Client connected: {sid} (user={user})")
-    # Store user on sid for later use
     await sio.save_session(sid, {'user': user})
     _sid_users[sid] = user
+    touch_activity(user)
+
     if radio and radio.connected:
         await sio.emit('radio_state', {'state': 'connected'}, to=sid)
-        # Send current LCD state immediately
         if lcd:
             await sio.emit('lcd_update', lcd.get_state(), to=sid)
     else:
@@ -194,7 +177,7 @@ async def connect(sid, environ):
 async def disconnect(sid):
     global _ptt_owner
     logger.info(f"Client disconnected: {sid}")
-    _sid_users.pop(sid, None)
+    user = _sid_users.pop(sid, None)
     if _ptt_owner == sid:
         if radio:
             radio.send_key(13)
@@ -204,10 +187,18 @@ async def disconnect(sid):
 
 @sio.event
 async def key_press(sid, data):
+    user = _sid_users.get(sid)
+    if not user:
+        return
+    # Check timeout on activity
+    if check_timeout(user):
+        await sio.disconnect(sid)
+        return
+    touch_activity(user)
+
     keycode = data.get('keycode', 0)
     if radio and radio.connected:
         radio.send_key(keycode)
-        # Force display refresh after radio has time to respond
         if lcd:
             await asyncio.sleep(0.15)
             lcd.force_flush()
@@ -216,9 +207,16 @@ async def key_press(sid, data):
 @sio.event
 async def ptt_on(sid, data=None):
     global _ptt_owner, _ptt_drain_task
+    user = _sid_users.get(sid)
+    if not user:
+        return
+    if check_timeout(user):
+        await sio.disconnect(sid)
+        return
+    touch_activity(user)
+
     if not radio or not radio.connected:
         return
-    # Cancel any pending drain if re-pressing quickly
     if _ptt_drain_task and not _ptt_drain_task.done():
         _ptt_drain_task.cancel()
         _ptt_drain_task = None
@@ -227,12 +225,10 @@ async def ptt_on(sid, data=None):
         return
     _ptt_owner = sid
     radio.send_key(16)
-    await asyncio.sleep(0.1)  # Wait for PLL to settle on TX freq
+    await asyncio.sleep(0.1)
     freq = await radio.read_frequency() or 'N/A'
-    user = _sid_users.get(sid, 'unknown')
     log_activity(user, 'PTT_ON', f'freq={freq}')
     await sio.emit('ptt_status', {'active': True, 'holder': sid})
-    # Force display refresh after radio has time to respond
     if lcd:
         await asyncio.sleep(0.15)
         lcd.force_flush()
@@ -240,7 +236,6 @@ async def ptt_on(sid, data=None):
 
 @sio.event
 async def ptt_off(sid, data=None):
-    """PTT released – wait for audio buffer, then release."""
     global _ptt_owner, _ptt_drain_task
     if _ptt_owner != sid:
         return
@@ -249,7 +244,6 @@ async def ptt_off(sid, data=None):
 
 
 async def _drain_and_release(sid):
-    """Fixed delay before releasing PTT to let aplay buffer drain."""
     global _ptt_owner, _ptt_drain_task
     try:
         await asyncio.sleep(_PTT_DRAIN_DELAY)
@@ -271,6 +265,9 @@ async def _drain_and_release(sid):
 
 @sio.event
 async def request_rssi(sid, data=None):
+    user = _sid_users.get(sid)
+    if user:
+        touch_activity(user)
     if radio and radio.connected:
         logger.info("RSSI requested")
         radio.request_rssi()
