@@ -1,8 +1,8 @@
 /* Q-Remote V3 — Stations Editor Styles */
 /* Complements the main style.css instrument panel theme */
 
-.stations-app {
-    max-width: 100%;
+.stations-app, #app.stations-app {
+    max-width: 1400px;
     width: 100%;
 }
 

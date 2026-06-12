@@ -79,6 +79,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     if exc.status_code in (401, 403):
+        # API routes should get JSON 401, not a redirect
+        if request.url.path.startswith(("/api/", "/stations/api/")):
+            return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
         return RedirectResponse(url="/login", status_code=303)
     return HTMLResponse(f"<h1>{exc.status_code}</h1><p>{exc.detail}</p>", status_code=exc.status_code)
 

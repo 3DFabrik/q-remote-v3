@@ -76,7 +76,7 @@ async function checkRadioStatus() {
     const light = document.getElementById('status-light');
     const label = document.getElementById('radio-status');
     try {
-        const res = await fetch('/api/status');
+        const res = await authFetch('/api/status');
         const data = await res.json();
         if (data.state === 'connected') {
             light.style.background = 'var(--green)';
@@ -97,7 +97,7 @@ async function checkRadioStatus() {
 
 async function loadChannels() {
     try {
-        const res = await fetch('/stations/api/stations');
+        const res = await authFetch('/stations/api/stations');
         const data = await res.json();
         channels = data.channels || [];
         renderTable();
@@ -389,7 +389,7 @@ async function finishEdit(td, ch, field, input, def) {
 
 async function saveChannel(ch) {
     try {
-        await fetch('/stations/api/stations/update', {
+        await authFetch('/stations/api/stations/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(ch),
@@ -478,7 +478,7 @@ async function readFromRadio() {
     showProgress('Reading EEPROM from radio...', 0, 0);
 
     try {
-        const res = await fetch('/stations/api/stations/read', { method: 'POST' });
+        const res = await authFetch('/stations/api/stations/read', { method: 'POST' });
         const data = await res.json();
 
         if (data.task_id) {
@@ -515,7 +515,7 @@ async function writeToRadio() {
     showProgress('Writing EEPROM to radio...', 0, 0);
 
     try {
-        const res = await fetch('/stations/api/stations/write', { method: 'POST' });
+        const res = await authFetch('/stations/api/stations/write', { method: 'POST' });
         const data = await res.json();
 
         if (data.task_id) {
@@ -537,7 +537,7 @@ async function writeToRadio() {
 
 async function pollTask(taskId, baseUrl, onComplete) {
     while (true) {
-        const res = await fetch(`${baseUrl}${taskId}/status`);
+        const res = await authFetch(`${baseUrl}${taskId}/status`);
         const task = await res.json();
 
         showProgress(
@@ -589,7 +589,7 @@ async function importCSV(e) {
     formData.append('file', file);
 
     try {
-        const res = await fetch('/stations/api/stations/import/csv', {
+        const res = await authFetch('/stations/api/stations/import/csv', {
             method: 'POST',
             body: formData,
         });
@@ -616,7 +616,7 @@ async function importCSV(e) {
 async function loadBackups() {
     const container = document.getElementById('backups-list');
     try {
-        const res = await fetch('/stations/api/stations/backups');
+        const res = await authFetch('/stations/api/stations/backups');
         const data = await res.json();
 
         if (!data.backups || data.backups.length === 0) {
@@ -645,7 +645,7 @@ async function loadBackups() {
 window.deleteBackup = async function(backupId) {
     if (!confirm('Delete this backup permanently?')) return;
     try {
-        const res = await fetch(`/stations/api/stations/backups/${backupId}`, { method: 'DELETE' });
+        const res = await authFetch(`/stations/api/stations/backups/${backupId}`, { method: 'DELETE' });
         if (!res.ok) throw new Error('Delete failed');
         loadBackups();
     } catch (e) {
@@ -656,7 +656,7 @@ window.deleteBackup = async function(backupId) {
 window.restoreBackup = async function(backupId) {
     if (!confirm('Load this backup into the editor?')) return;
     try {
-        const res = await fetch(`/stations/api/stations/restore/${backupId}`, { method: 'POST' });
+        const res = await authFetch(`/stations/api/stations/restore/${backupId}`, { method: 'POST' });
         const data = await res.json();
         await loadChannels();
         alert(`Loaded ${data.restored} channels into editor.`);
@@ -665,26 +665,20 @@ window.restoreBackup = async function(backupId) {
     }
 };
 
+// ─── Auth-aware fetch helper ────────────────────────────────────
+async function authFetch(url, opts = {}) {
+    const res = await fetch(url, opts);
+    if (res.status === 401) {
+        window.location.href = '/login';
+        return null;
+    }
+    return res;
+}
+
 // ─── Session Timeout & Heartbeat ──────────────────────────────
 
 (function setupSessionManagement() {
     const HEARTBEAT_INTERVAL = 60 * 1000;  // 1 minute
-
-    // Heartbeat to keep session alive
-    setInterval(async () => {
-        try {
-            const resp = await fetch("/api/heartbeat", { method: "POST" });
-            if (resp.status === 401) {
-                window.location.href = "/login";
-            }
-        } catch (e) {
-            console.warn("Heartbeat failed:", e);
-        }
-
-// ─── Session Timeout & Heartbeat ──────────────────────────────
-
-(function setupSessionManagement() {
-    const HEARTBEAT_INTERVAL = 60 * 1000;
 
     setInterval(async () => {
         try {
