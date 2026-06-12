@@ -322,21 +322,16 @@ q-remote-v3/
 
 | Was | Wert |
 |-----|------|
-| Host | HamPi (192.168.1.67, DHCP) |
-| User | `elsen` |
-| Repo auf Pi | `/home/elsen/q-remote-v3/` |
-| GitHub | <https://github.com/3DFabrik/q-remote-v3> (öffentlich) |
-| Service | uvicorn, User `elsen` |
+| Backend | Python/FastAPI + Uvicorn |
 | Reverse Proxy | Caddy (automatic HTTPS) |
-| Domain | ham.elsens.de |
 | Firmware | QuanshengDock 0.32.21q |
+| Repo | <https://github.com/3DFabrik/q-remote-v3> |
 
 ## Gegebenheiten ⚠️
 
 - **HTTPS ist Pflicht** – Browser verlangen sicheren Kontext für `getUserMedia()` (Mikrofon). Caddy übernimmt das automatisch.
 - **Dokumentation** – Jede Komponente wird dokumentiert (Docstrings + README + API-Docs). Code soll für andere verständlich sein.
-- **Öffentliches Repo** – Keine Secrets im Code! Config-Templates mit Platzhaltern, echte Werte nur auf dem Pi.
-- **Ein User auf dem Pi** – `elsen`. Falls Rechte nicht reichen → `sudo` wo nötig, keinen neuen User anlegen.
+- **Keine Secrets im Code** – Config-Templates mit Platzhaltern, echte Werte nur in der lokalen Deployment-Config.
 
 ## Entscheidungen ✅
 
@@ -348,7 +343,7 @@ q-remote-v3/
 
 4. **Session-basiert statt JWT** – Starlette Session Middleware. Simpler, Server-side Timeout möglich, per-User konfigurierbar.
 
-5. **UV-K5 zuerst, Hamlib später** – Radio-Layer hinter einem Interface (`RadioAdapter`). V3 implementiert `QuanshengAdapter` (Serial). Später kommt `HamlibAdapter` dazu für andere Geräte.
+5. **UV-K5 zuerst, Hamlib später** – Radio-Layer hinter einem Interface. V3 implementiert den Quansheng-Adapter (Serial). Später kommt ein Hamlib-Adapter für andere Geräte.
 
 ---
 
