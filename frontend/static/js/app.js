@@ -142,14 +142,17 @@ async function init() {
     };
 
     control.onPttStatus = (active, holder, error, user) => {
+        const isMe = active && user === window.CURRENT_USER?.name;
         state.pttActive = active;
         if (active) {
             pttBtn.classList.add("active");
             smeter.isTX = true;
             smeter.targetAngle = 0;
             smeter.draw();
-            rxAudio.muted = true;  // suppress echo while transmitting
-            if (user && user !== window.CURRENT_USER?.name) {
+            if (isMe) {
+                rxAudio.muted = true;  // only sender mutes own RX (echo suppression)
+            }
+            if (user && !isMe) {
                 pttNetStatus.textContent = "📡 " + user + " sendet...";
             }
         } else {
