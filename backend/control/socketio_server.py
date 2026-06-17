@@ -228,8 +228,7 @@ async def ptt_on(sid, data=None):
     await asyncio.sleep(0.1)
     freq = await radio.read_frequency() or 'N/A'
     log_activity(user, 'PTT_ON', f'freq={freq}')
-    await sio.emit('ptt_status', {'active': True, 'holder': sid, 'user': user})
-n        await broadcast_ptt_users()
+    await sio.emit('ptt_status', {'active': True, 'holder': sid})
     if lcd:
         await asyncio.sleep(0.15)
         lcd.force_flush()
@@ -258,10 +257,8 @@ async def _drain_and_release(sid):
         if radio:
             radio.send_key(13)
         _ptt_owner = None
-        user = _sid_users.get(sid)
-        await sio.emit('ptt_status', { 'active': False, 'holder': None, 'user': user })
+        await sio.emit('ptt_status', {'active': False, 'holder': None})
         if lcd:
-n        await broadcast_ptt_users()
             await asyncio.sleep(0.15)
             lcd.force_flush()
 
@@ -274,17 +271,3 @@ async def request_rssi(sid, data=None):
     if radio and radio.connected:
         logger.info("RSSI requested")
         radio.request_rssi()
-
-
-async def broadcast_ptt_users():
-    Send current PTT user status to all clients.
-    active_users = []
-    if _ptt_owner:
-        user = _sid_users.get(_ptt_owner)
-        if user:
-            active_users.append({
-                user: user,
-                client_id: _ptt_owner,
-                active: True
-            })
-    await sio.emit(ptt_users_update, {active_users: active_users})

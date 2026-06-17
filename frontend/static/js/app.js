@@ -141,49 +141,13 @@ async function init() {
     };
 
     control.onPttStatus = (active, holder, error) => {
-n    control.onPttUsersUpdate = function(activeUsers) {
-        updatePTTStatusPanel(activeUsers);
-    };
-n    control.onPttUsersUpdate = (activeUsers) => {
-n    control.onPttUsersUpdate = function(activeUsers) {
-        updatePTTStatusPanel(activeUsers);
-    };
-        updatePTTStatusPanel(activeUsers);
-n    control.onPttUsersUpdate = function(activeUsers) {
-        updatePTTStatusPanel(activeUsers);
-    };
-    };
-n    control.onPttUsersUpdate = function(activeUsers) {
-        updatePTTStatusPanel(activeUsers);
-    };
         state.pttActive = active;
-n    control.onPttUsersUpdate = (activeUsers) => {
-        updatePTTStatusPanel(activeUsers);
-    };
         if (active) {
-n    control.onPttUsersUpdate = (activeUsers) => {
-        updatePTTStatusPanel(activeUsers);
-    };
             pttBtn.classList.add("active");
-n    control.onPttUsersUpdate = (activeUsers) => {
-        updatePTTStatusPanel(activeUsers);
-    };
             smeter.isTX = true;
-n    control.onPttUsersUpdate = (activeUsers) => {
-        updatePTTStatusPanel(activeUsers);
-    };
             smeter.targetAngle = 0;
-n    control.onPttUsersUpdate = (activeUsers) => {
-        updatePTTStatusPanel(activeUsers);
-    };
             smeter.draw();
-n    control.onPttUsersUpdate = (activeUsers) => {
-        updatePTTStatusPanel(activeUsers);
-    };
         } else {
-n    control.onPttUsersUpdate = (activeUsers) => {
-        updatePTTStatusPanel(activeUsers);
-    };
             pttBtn.classList.remove("active");
             smeter.setRX(0);
         }
@@ -267,23 +231,3 @@ function setupAudioToggle() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
-function updatePTTStatusPanel(activeUsers) {
-    const indicators = document.getElementById(ptt-status-indicators);
-    if (!indicators) return;
-    indicators.innerHTML = ;
-    if (activeUsers.length === 0) {
-function updatePTTStatusPanel(activeUsers) {
-    var indicators = document.getElementById(ptt-status-indicators);
-    if (!indicators) return;
-    indicators.innerHTML = ;
-    if (activeUsers.length === 0) {
-        indicators.innerHTML = No active PTT;
-        return;
-    }
-    activeUsers.forEach(function(user) {
-        var div = document.createElement(div);
-        div.className = ptt-active-user;
-        div.textContent = user.user +  sending...;
-        indicators.appendChild(div);
-    });
-}

@@ -28,42 +28,6 @@
     /* Typography */
     --font-mono: 'Share Tech Mono', 'Courier New', monospace;
     --font-label: 'Share Tech Mono', monospace;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -85,42 +49,6 @@ body {
             rgba(0,0,0,0.03) 2px,
             rgba(0,0,0,0.03) 4px
         );
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* ─── Main Panel (Equipment Rack) ──────────────────────────────── */
@@ -128,42 +56,6 @@ n/* ─── PTT Status Panel ────────────────�
 #app {
     max-width: 480px;
     width: 100%;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .instrument-panel {
@@ -177,42 +69,6 @@ n/* ─── PTT Status Panel ────────────────�
         inset 0 -1px 0 rgba(0,0,0,0.2),
         0 4px 12px rgba(0,0,0,0.5);
     position: relative;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* Panel screws */
@@ -226,42 +82,6 @@ n/* ─── PTT Status Panel ────────────────�
     background: radial-gradient(circle at 40% 40%, #888, #555);
     border: 1px solid #444;
     box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 .instrument-panel::before { top: 6px; left: 6px; }
 .instrument-panel::after { top: 6px; right: 6px; }
@@ -274,42 +94,6 @@ n/* ─── PTT Status Panel ────────────────�
     text-align: center;
     margin-bottom: 6px;
     font-weight: bold;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .action-buttons {
@@ -317,42 +101,6 @@ n/* ─── PTT Status Panel ────────────────�
     flex-direction: row;
     gap: 8px;
     width: 100%;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 #btn-read, #btn-write, #btn-export,
@@ -365,84 +113,12 @@ n/* ─── PTT Status Panel ────────────────�
     font-size: 0.7rem !important;
     border-radius: 3px;
     line-height: 1.2 !important;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 #btn-read .btn-label, #btn-write .btn-label,
 #btn-export .btn-label, .action-buttons .import-label .btn-label {
     font-size: 0.7rem !important;
     text-align: center;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .action-buttons .filter-btn {
@@ -454,83 +130,11 @@ n/* ─── PTT Status Panel ────────────────�
     flex: 0 0 auto;
     outline: none !important;
     filter: none !important;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .action-buttons .filter-btn:focus {
     outline: none !important;
     filter: none !important;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .action-buttons .filter-btn.active {
@@ -538,42 +142,6 @@ n/* ─── PTT Status Panel ────────────────�
     box-shadow: 0 2px 0 #222, 0 3px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15) !important;
     color: #FFD700 !important;
     text-shadow: none !important;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .action-sep {
@@ -581,42 +149,6 @@ n/* ─── PTT Status Panel ────────────────�
     background: #444;
     margin: 2px 4px;
     align-self: stretch;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .action-buttons .channel-count {
@@ -626,82 +158,10 @@ n/* ─── PTT Status Panel ────────────────�
     align-items: center;
     white-space: nowrap;
     padding: 0 4px;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 #crt-bezel.instrument-panel {
     padding: 16px;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* ─── Header ───────────────────────────────────────────────────── */
@@ -717,84 +177,12 @@ header {
     border-radius: 6px;
     margin-bottom: 12px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 .header-brand {
     display: flex;
     flex-direction: column;
     gap: 1px;
     flex-shrink: 0;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 .header-brand h1 {
     font-size: 1rem;
@@ -803,167 +191,23 @@ n/* ─── PTT Status Panel ────────────────�
     text-transform: uppercase;
     margin: 0;
     line-height: 1.2;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 .header-center {
     flex: 1;
     display: flex;
     justify-content: center !important;
     align-items: center;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 .header-center #user-name {
     font-size: 0.7rem;
     color: #555;
     text-transform: uppercase;
     letter-spacing: 1px;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 .header-buttons {
     display: flex;
     gap: 6px;
     flex-shrink: 0;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 .hdr-btn {
     display: flex;
@@ -989,42 +233,6 @@ n/* ─── PTT Status Panel ────────────────�
     transition: all 0.05s;
     width: 56px;
     text-decoration: none;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 .hdr-btn:active {
     transform: translateY(2px);
@@ -1033,84 +241,12 @@ n/* ─── PTT Status Panel ────────────────�
         0 1px 2px rgba(0,0,0,0.4),
         inset 0 2px 4px rgba(0,0,0,0.4);
     background: linear-gradient(180deg, #555 0%, #383838 40%, #2a2a2a 100%);
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 .hdr-btn:hover { border-color: var(--accent); }
 .hdr-btn.active {
     background: #2a5030;
     border-color: var(--green);
     box-shadow: 0 0 8px rgba(0,204,68,0.3);
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 .hdr-btn-icon { display: block; font-size: 20px; line-height: 1; text-align: center; width: 100%; }
 .hdr-btn-label { margin-top: 2px; letter-spacing: 1px; }
@@ -1123,42 +259,6 @@ n/* ─── PTT Status Panel ────────────────�
     text-transform: uppercase;
     letter-spacing: 1px;
     color: #555;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .status-light {
@@ -1168,42 +268,6 @@ n/* ─── PTT Status Panel ────────────────�
     background: #666;
     border: 1px solid #444;
     box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .status-light.on {
@@ -1212,42 +276,6 @@ n/* ─── PTT Status Panel ────────────────�
         inset 0 1px 2px rgba(255,255,255,0.3),
         0 0 8px var(--green),
         0 0 16px rgba(0,204,68,0.3);
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .status-light.error {
@@ -1256,42 +284,6 @@ n/* ─── PTT Status Panel ────────────────�
         inset 0 1px 2px rgba(255,255,255,0.3),
         0 0 8px var(--red),
         0 0 16px rgba(204,34,0,0.3);
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* ─── CRT Display ──────────────────────────────────────────────── */
@@ -1303,42 +295,6 @@ n/* ─── PTT Status Panel ────────────────�
     margin-bottom: 12px;
     border: 2px solid var(--panel-border);
     box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 #display-section {
@@ -1351,42 +307,6 @@ n/* ─── PTT Status Panel ────────────────�
         inset 0 0 30px rgba(0,255,65,0.05),
         inset 0 0 60px rgba(0,0,0,0.8);
     overflow: hidden;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* CRT effects disabled for readability - Tektronix sharpness! */
@@ -1397,126 +317,18 @@ n/* ─── PTT Status Panel ────────────────�
     display: block;
     margin: 0 auto;
     border-radius: 4px;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* ─── S-Meter ──────────────────────────────────────────────────── */
 
 #smeter-section {
     margin-bottom: 12px;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 #smeter-ptt-row {
     display: flex;
     gap: 12px;
     align-items: stretch;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 #smeter {
@@ -1530,83 +342,11 @@ n/* ─── PTT Status Panel ────────────────�
     gap: 2px;
     border: 2px solid var(--panel-border);
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 #smeter-canvas {
     width: 100%;
     display: block;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 #smeter-value {
@@ -1615,42 +355,6 @@ n/* ─── PTT Status Panel ────────────────�
     color: var(--phosphor);
     text-align: center;
     text-shadow: 0 0 6px rgba(0,255,65,0.5);
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 #ptt-column {
@@ -1659,84 +363,12 @@ n/* ─── PTT Status Panel ────────────────�
     align-items: center;
     justify-content: center !important;
     min-width: 120px;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* ─── Controls Panel ───────────────────────────────────────────── */
 
 #controls {
     margin-top: 8px;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .control-row {
@@ -1744,83 +376,11 @@ n/* ─── PTT Status Panel ────────────────�
     gap: 8px;
     margin-bottom: 10px;
     justify-content: center !important;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* Top row buttons (M ▲ ▼ EXIT) equally spaced */
 .control-row .radio-btn {
     flex: 1;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .control-grid {
@@ -1829,42 +389,6 @@ n/* ─── PTT Status Panel ────────────────�
     gap: 8px;
     margin-bottom: 12px;
     padding: 0 4px;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* ─── Buttons ──────────────────────────────────────────────────── */
@@ -1893,84 +417,12 @@ n/* ─── PTT Status Panel ────────────────�
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .radio-btn .btn-label {
     font-size: 0.95rem;
     line-height: 1;
     text-align: left;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .radio-btn .btn-sub {
@@ -1979,84 +431,12 @@ n/* ─── PTT Status Panel ────────────────�
     opacity: 0.8;
     letter-spacing: 0.5px;
     text-align: right;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* Buttons without sub-label: center the main label */
 .radio-btn.nav-key,
 .radio-btn.arrow-key {
     justify-content: center !important;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .radio-btn:active {
@@ -2066,42 +446,6 @@ n/* ─── PTT Status Panel ────────────────�
         0 1px 2px rgba(0,0,0,0.4),
         inset 0 2px 4px rgba(0,0,0,0.4);
     background: linear-gradient(180deg, #555 0%, #383838 40%, #2a2a2a 100%);
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* Function keys removed – using UV-K5 layout */
@@ -2111,82 +455,10 @@ n/* ─── PTT Status Panel ────────────────�
     color: var(--amber);
     font-weight: bold;
     letter-spacing: 1px;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .radio-btn.btn-exit {
     color: #ff6644;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* Arrow keys – same size as others */
@@ -2194,42 +466,6 @@ n/* ─── PTT Status Panel ────────────────�
 /* F button – blue accent */
 .radio-btn.btn-f {
     color: #66aaff;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* ─── PTT Button (The Big Red Switch) ──────────────────────────── */
@@ -2265,42 +501,6 @@ n/* ─── PTT Status Panel ────────────────�
         inset 0 -2px 4px rgba(0,0,0,0.3);
     transition: all 0.08s;
     position: relative;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .ptt-button:active,
@@ -2318,42 +518,6 @@ n/* ─── PTT Status Panel ────────────────�
         0 0 20px rgba(255,68,34,0.5),
         0 0 40px rgba(255,68,34,0.2),
         inset 0 2px 6px rgba(0,0,0,0.4);
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* TX indicator */
@@ -2363,42 +527,6 @@ n/* ─── PTT Status Panel ────────────────�
     margin-left: 8px;
     opacity: 0;
     transition: opacity 0.1s;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 .ptt-button.active::after {
@@ -2406,83 +534,11 @@ n/* ─── PTT Status Panel ────────────────�
     color: #ff6600;
     text-shadow: 0 0 8px #ff6600;
     animation: blink 0.5s infinite;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 @keyframes blink {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.3; }
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* ─── Engraved Labels ──────────────────────────────────────────── */
@@ -2495,42 +551,6 @@ n/* ─── PTT Status Panel ────────────────�
     text-shadow: 0 1px 0 rgba(255,255,255,0.3);
     text-align: center;
     margin-top: 4px;
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* ─── Responsive ───────────────────────────────────────────────── */
@@ -2547,42 +567,6 @@ n/* ─── PTT Status Panel ────────────────�
     .ptt-button {
         padding: 18px 16px;
     }
-n/* ─── PTT Status Panel ───────────────────────────────────── */
-#ptt-status-panel {
-    background: #1a1814;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 8px;
-    min-height: 40px;
-}
-
-#ptt-status-indicators {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.status-placeholder {
-    color: #666;
-    font-size: 0.8rem;
-    text-align: center;
-    font-style: italic;
-}
-
-.ptt-active-user {
-    color: #ff4444;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2px 0;
-}
-
-.ptt-inactive {
-    color: #888;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
 }
 
 /* ─── Audio Toggle Button ──────────────────────────────────── */
