@@ -16,7 +16,7 @@ class ControlModule {
         this.onDisplayUpdate = null;   // (drawCommands) => {}
         this.onRssiUpdate = null;      // (dbm, sUnit, sRaw) => {}
         this.onRadioState = null;      // (state) => {}
-        this.onPttStatus = null;       // (active, holder) => {}
+        this.onPttStatus = null;       // (active, holder, error, user) => {}
         this.onConnect = null;         // () => {}
         this.onDisconnect = null;      // () => {}
     }
@@ -60,7 +60,7 @@ class ControlModule {
         });
         
         this.socket.on('ptt_status', (data) => {
-            if (this.onPttStatus) this.onPttStatus(data.active, data.holder, data.error);
+            if (this.onPttStatus) this.onPttStatus(data.active, data.holder, data.error, data.user);
         });
     }
     

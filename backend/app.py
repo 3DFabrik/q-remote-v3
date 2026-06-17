@@ -56,6 +56,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Could not load squelch config: {e}")
         tx_audio.start()
+        tx_audio.set_relay_targets(rx_audio._clients)
     else:
         logger.warning("Radio not available")
 

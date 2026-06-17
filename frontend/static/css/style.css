@@ -571,3 +571,14 @@ header {
 
 /* ─── Audio Toggle Button ──────────────────────────────────── */
 
+
+
+/* ─── PTT Network Status ────────────────────────────────────── */
+.ptt-net-status {
+    color: #e10600;
+    font-size: 0.7rem;
+    text-align: center;
+    min-height: 1em;
+    margin-top: 4px;
+    font-family: var(--font-mono, monospace);
+}

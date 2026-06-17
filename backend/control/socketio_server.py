@@ -182,7 +182,7 @@ async def disconnect(sid):
         if radio:
             radio.send_key(13)
         _ptt_owner = None
-        await sio.emit('ptt_status', {'active': False, 'holder': None})
+        await sio.emit('ptt_status', {'active': False, 'holder': None, 'user': None})
 
 
 @sio.event
@@ -228,7 +228,7 @@ async def ptt_on(sid, data=None):
     await asyncio.sleep(0.1)
     freq = await radio.read_frequency() or 'N/A'
     log_activity(user, 'PTT_ON', f'freq={freq}')
-    await sio.emit('ptt_status', {'active': True, 'holder': sid})
+    await sio.emit('ptt_status', {'active': True, 'holder': sid, 'user': user})
     if lcd:
         await asyncio.sleep(0.15)
         lcd.force_flush()
@@ -257,7 +257,7 @@ async def _drain_and_release(sid):
         if radio:
             radio.send_key(13)
         _ptt_owner = None
-        await sio.emit('ptt_status', {'active': False, 'holder': None})
+        await sio.emit('ptt_status', {'active': False, 'holder': None, 'user': None})
         if lcd:
             await asyncio.sleep(0.15)
             lcd.force_flush()

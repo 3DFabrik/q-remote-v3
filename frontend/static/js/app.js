@@ -18,6 +18,7 @@ const statusLight = document.getElementById("status-light");
 const pttBtn = document.getElementById("ptt-btn");
 const smeterCanvas = document.getElementById("smeter-canvas");
 const lcdCanvas = document.getElementById("lcd");
+const pttNetStatus = document.getElementById("ptt-net-status");
 
 const display = new DisplayRenderer(lcdCanvas);
 const smeter = new AnalogSMeter(smeterCanvas);
@@ -140,16 +141,22 @@ async function init() {
         smeter.updateRX(continuousSraw);
     };
 
-    control.onPttStatus = (active, holder, error) => {
+    control.onPttStatus = (active, holder, error, user) => {
         state.pttActive = active;
         if (active) {
             pttBtn.classList.add("active");
             smeter.isTX = true;
             smeter.targetAngle = 0;
             smeter.draw();
+            rxAudio.muted = true;  // suppress echo while transmitting
+            if (user && user !== window.CURRENT_USER?.name) {
+                pttNetStatus.textContent = "📡 " + user + " sendet...";
+            }
         } else {
             pttBtn.classList.remove("active");
             smeter.setRX(0);
+            rxAudio.muted = false;
+            pttNetStatus.textContent = "";
         }
     };
 
