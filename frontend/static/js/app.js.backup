@@ -141,19 +141,7 @@ async function init() {
     };
 
     control.onPttStatus = (active, holder, error) => {
-n    control.onPttUsersUpdate = function(activeUsers) {
-        updatePTTStatusPanel(activeUsers);
-    };
 n    control.onPttUsersUpdate = (activeUsers) => {
-n    control.onPttUsersUpdate = function(activeUsers) {
-        updatePTTStatusPanel(activeUsers);
-    };
-        updatePTTStatusPanel(activeUsers);
-n    control.onPttUsersUpdate = function(activeUsers) {
-        updatePTTStatusPanel(activeUsers);
-    };
-    };
-n    control.onPttUsersUpdate = function(activeUsers) {
         updatePTTStatusPanel(activeUsers);
     };
         state.pttActive = active;
@@ -267,23 +255,3 @@ function setupAudioToggle() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
-function updatePTTStatusPanel(activeUsers) {
-    const indicators = document.getElementById(ptt-status-indicators);
-    if (!indicators) return;
-    indicators.innerHTML = ;
-    if (activeUsers.length === 0) {
-function updatePTTStatusPanel(activeUsers) {
-    var indicators = document.getElementById(ptt-status-indicators);
-    if (!indicators) return;
-    indicators.innerHTML = ;
-    if (activeUsers.length === 0) {
-        indicators.innerHTML = No active PTT;
-        return;
-    }
-    activeUsers.forEach(function(user) {
-        var div = document.createElement(div);
-        div.className = ptt-active-user;
-        div.textContent = user.user +  sending...;
-        indicators.appendChild(div);
-    });
-}
