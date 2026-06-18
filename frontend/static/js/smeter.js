@@ -15,6 +15,11 @@ export class AnalogSMeter {
         this.targetAngle = 0;
         this.decayTimer = null;
         this.isTX = false;
+        this.hasRXSignal = false;
+        this.rxGlow = 0;
+        this.txGlow = 0;
+        this.rxGlowTarget = 0;
+        this.txGlowTarget = 0;
 
         this.bgColor = '#1a1a18';
         this.scaleColor = '#c8c0a0';
@@ -27,6 +32,8 @@ export class AnalogSMeter {
 
     updateRX(sRaw) {
         if (this.isTX) return;
+        this.hasRXSignal = sRaw > 0;
+        this.rxGlowTarget = sRaw > 0 ? 1 : 0;
         const normalized = Math.max(0, Math.min(1, sRaw / 15));
         this.targetAngle = normalized;
         this.animate('rx');
@@ -35,6 +42,8 @@ export class AnalogSMeter {
     setTX(powerLevel) {
         // Legacy: static TX display (kept for compatibility)
         this.isTX = true;
+        this.txGlowTarget = 1;
+        this.rxGlowTarget = 0;
         const levels = { 'L': 0.15, 'M': 0.45, 'H': 0.85 };
         this.targetAngle = levels[powerLevel] || 0.5;
         this.animate('tx');
@@ -48,6 +57,8 @@ export class AnalogSMeter {
         if (!this.isTX) {
             this.isTX = true;
         }
+        this.txGlowTarget = 1;
+        this.rxGlowTarget = 0;
         // Convert RMS to dB: 0 dBFS = rms 1.0
         // Map range: -40 dBFS .. 0 dBFS → 0..1
         // rms 0 → -inf → 0, rms 1.0 → 0 dB → 1.0
@@ -61,6 +72,9 @@ export class AnalogSMeter {
 
     setRX(sRaw) {
         this.isTX = false;
+        this.hasRXSignal = sRaw > 0;
+        this.rxGlowTarget = sRaw > 0 ? 1 : 0;
+        this.txGlowTarget = 0;
         const normalized = Math.max(0, Math.min(1, sRaw / 15));
         this.targetAngle = normalized;
         this.animate('rx');
@@ -71,8 +85,15 @@ export class AnalogSMeter {
         if (this.decayTimer) return;
         const step = () => {
             const diff = this.targetAngle - this.currentAngle;
-            if (Math.abs(diff) < 0.003) {
+            // Smooth glow transitions (slow fade like incandescent / neon)
+            const glowSpeed = 0.04;
+            this.rxGlow += (this.rxGlowTarget - this.rxGlow) * glowSpeed;
+            this.txGlow += (this.txGlowTarget - this.txGlow) * glowSpeed;
+            const glowDone = Math.abs(this.rxGlowTarget - this.rxGlow) < 0.003 && Math.abs(this.txGlowTarget - this.txGlow) < 0.003;
+            if (Math.abs(diff) < 0.003 && glowDone) {
                 this.currentAngle = this.targetAngle;
+                this.rxGlow = this.rxGlowTarget;
+                this.txGlow = this.txGlowTarget;
                 this.draw();
                 this.decayTimer = null;
                 return;
@@ -130,9 +151,15 @@ export class AnalogSMeter {
         // Needle
         const needleAngle = startAngle + this.currentAngle * (endAngle - startAngle);
         const needleLen = radius - 4;
+        const whiteTipLen = 15;
+        const redLen = needleLen - whiteTipLen;
+
         const nx = cx + Math.cos(needleAngle) * needleLen;
         const ny = cy + Math.sin(needleAngle) * needleLen;
+        const rx = cx + Math.cos(needleAngle) * redLen;
+        const ry = cy + Math.sin(needleAngle) * redLen;
 
+        // Shadow
         ctx.beginPath();
         ctx.moveTo(cx + 1, cy + 1);
         ctx.lineTo(nx + 1, ny + 1);
@@ -140,17 +167,55 @@ export class AnalogSMeter {
         ctx.strokeStyle = 'rgba(0,0,0,0.3)';
         ctx.stroke();
 
+        // Red part
         ctx.beginPath();
         ctx.moveTo(cx, cy);
-        ctx.lineTo(nx, ny);
+        ctx.lineTo(rx, ry);
         ctx.lineWidth = 2;
         ctx.strokeStyle = this.needleColor;
         ctx.stroke();
 
+        // White tip (last 15px)
         ctx.beginPath();
-        ctx.arc(nx, ny, 2, 0, Math.PI * 2);
-        ctx.fillStyle = this.needleColor;
-        ctx.fill();
+        ctx.moveTo(rx, ry);
+        ctx.lineTo(nx, ny);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#c8c0a0';
+        ctx.stroke();
+
+        // RX/TX indicators (HP 70s LED style)
+        this._drawIndicators(ctx);
+    }
+
+    _drawIndicators(ctx) {
+        // HP-style LED indicators stacked vertically on the left side
+        const indicatorX = 14;
+        const rxY = 18;
+        const txY = 34;
+
+        // RX indicator
+        const rxIntensity = this.rxGlow;
+        const rxA = 0.09 + 0.91 * rxIntensity;  // 0.09 dim → 1.0 bright
+        ctx.shadowBlur = 12 * rxIntensity;
+        ctx.shadowColor = 'rgba(0,255,68,' + rxA + ')';
+        ctx.fillStyle = 'rgba(0,255,68,' + rxA + ')';
+        ctx.font = 'bold 13px monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('RX', indicatorX, rxY);
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'rgba(0,0,0,0)';
+
+        // TX indicator
+        const txIntensity = this.txGlow;
+        const txA = 0.09 + 0.91 * txIntensity;
+        ctx.shadowBlur = 16 * txIntensity;
+        ctx.shadowColor = 'rgba(255,68,68,' + txA + ')';
+        ctx.fillStyle = 'rgba(255,68,68,' + txA + ')';
+        ctx.font = 'bold 13px monospace';
+        ctx.fillText('TX', indicatorX, txY);
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'rgba(0,0,0,0)';
     }
 
     _drawRXScale(ctx, cx, cy, radius, startAngle, endAngle) {

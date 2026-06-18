@@ -128,7 +128,8 @@ async function init() {
     };
 
     function dbmToSraw(dbm) {
-        if (dbm <= -121) return 0;
+        // Squelch: below -115 dBm (S1) treat as no signal
+        if (dbm <= -115) return 0;
         if (dbm >= -13) return 15;
         if (dbm <= -73) {
             return 1 + (dbm - (-121)) / 6;
@@ -147,8 +148,10 @@ async function init() {
         if (active) {
             pttBtn.classList.add("active");
             smeter.isTX = true;
+            smeter.txGlowTarget = 1;
+            smeter.rxGlowTarget = 0;
             smeter.targetAngle = 0;
-            smeter.draw();
+            smeter.animate('tx');
             if (isMe) {
                 rxAudio.muted = true;  // only sender mutes own RX (echo suppression)
             }
