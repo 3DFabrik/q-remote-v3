@@ -7,7 +7,7 @@
 
 let channels = [];
 let filter = 'used';  // 'used' | 'all'
-let selectedRow = null;
+let selectedChannelNum = null;
 let editingCell = null;
 
 const table = document.getElementById('channels-table');
@@ -112,9 +112,6 @@ function renderTable() {
     const filtered = filter === 'used'
         ? channels.filter(c => c.inUse)
         : channels;
-
-    document.getElementById('count-used').textContent = channels.filter(c => c.inUse).length;
-    document.getElementById('count-total').textContent = channels.length;
 
     if (filtered.length === 0) {
         tbody.innerHTML = '<tr><td colspan="19" class="empty-msg">No channels loaded. Click "Read from Radio" to load.</td></tr>';
@@ -399,9 +396,111 @@ async function saveChannel(ch) {
     }
 }
 
+// ─── Channel Row Operations ───────────────────────────────
+
+async function batchSaveAll() {
+    try {
+        await authFetch('/stations/api/stations/update-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channels }),
+        });
+    } catch (e) {
+        console.error('Batch save failed:', e);
+    }
+}
+
+function reselectRow() {
+    if (!selectedChannelNum) return;
+    const row = tbody.querySelector(`tr[data-ch="${selectedChannelNum}"]`);
+    if (row) {
+        row.classList.add('selected');
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+function moveChannel(direction) {
+    if (!selectedChannelNum) { alert('Please select a channel first.'); return; }
+    const targetNum = selectedChannelNum + direction;
+    if (targetNum < 1 || targetNum > channels.length) return;
+
+    const ch = channels[selectedChannelNum - 1];
+    const target = channels[targetNum - 1];
+
+    // Swap all fields except 'number'
+    const tmp = { ...ch };
+    Object.keys(ch).forEach(k => { if (k !== 'number') ch[k] = target[k]; });
+    Object.keys(target).forEach(k => { if (k !== 'number') target[k] = tmp[k]; });
+
+    selectedChannelNum = targetNum;
+    batchSaveAll();
+    renderTable();
+    reselectRow();
+}
+
+function deleteChannelRow() {
+    if (!selectedChannelNum) { alert('Please select a channel first.'); return; }
+    const idx = selectedChannelNum - 1;
+
+    // Shift channels down by 1 from idx
+    for (let i = idx; i < channels.length - 1; i++) {
+        const src = { ...channels[i + 1] };
+        Object.keys(channels[i]).forEach(k => { if (k !== 'number') channels[i][k] = src[k]; });
+    }
+    // Clear last channel
+    const last = channels[channels.length - 1];
+    const empty = _emptyChannel(last.number);
+    Object.keys(last).forEach(k => { if (k !== 'number') last[k] = empty[k]; });
+
+    batchSaveAll();
+    renderTable();
+    reselectRow();
+}
+
+function insertChannelRow() {
+    // If no channels loaded yet, initialize empty 200-channel list
+    if (!channels || channels.length === 0) {
+        channels = [];
+        for (let i = 1; i <= 200; i++) channels.push(_emptyChannel(i));
+    }
+    const insertAt = selectedChannelNum ? selectedChannelNum - 1 : 0;
+
+    // Shift channels up by 1 from insertAt
+    for (let i = channels.length - 1; i > insertAt; i--) {
+        const src = { ...channels[i - 1] };
+        Object.keys(channels[i]).forEach(k => { if (k !== 'number') channels[i][k] = src[k]; });
+    }
+    // Clear the channel at insertAt (new empty row, inUse so it shows under 'Used' filter)
+    const ch = channels[insertAt];
+    const empty = _emptyChannel(ch.number);
+    Object.keys(ch).forEach(k => { if (k !== 'number') ch[k] = empty[k]; });
+    ch.inUse = true;
+
+    selectedChannelNum = insertAt + 1;
+
+    batchSaveAll();
+    renderTable();
+    reselectRow();
+}
+
+function _emptyChannel(num) {
+    return { number: num, rxFreq: 0, inUse: false, name: '', txOffset: 0,
+        offsetDir: 'Off', rxCode: 0, txCode: 0, rxCodeType: 'None',
+        txCodeType: 'None', modulation: 'FM', bandwidth: 'Wide',
+        power: 'High', step: '12.5kHz', busyLock: false, reverse: false,
+        pttId: 'Off', dtmf: false, scramble: 'Off', compander: 'Off',
+        scanlist: 'None', band: 15 };
+}
+
 // ─── Event Bindings ───────────────────────────────────────────
 
 function bindEvents() {
+    // Row operation buttons
+    document.getElementById('btn-up').addEventListener('click', () => moveChannel(-1));
+    document.getElementById('btn-down').addEventListener('click', () => moveChannel(1));
+    document.getElementById('btn-del').addEventListener('click', deleteChannelRow);
+    document.getElementById('btn-add').addEventListener('click', insertChannelRow);
+
     // Read from radio
     document.getElementById('btn-read').addEventListener('click', readFromRadio);
 
@@ -447,6 +546,7 @@ function bindEvents() {
         // Select row
         document.querySelectorAll('#channels-table tr.selected').forEach(r => r.classList.remove('selected'));
         tr.classList.add('selected');
+        selectedChannelNum = chNum;
 
         // Skip editing for col-num and col-band
         if (td.classList.contains('col-num') || td.classList.contains('col-band')) return;

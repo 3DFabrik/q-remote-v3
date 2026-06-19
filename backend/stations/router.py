@@ -493,3 +493,16 @@ async def api_update_channel(request: Request, _=Depends(login_required)):
 
     _set_channels(channels)
     return {"ok": True}
+
+
+@stations_router.post("/api/stations/update-all")
+async def api_update_all(request: Request, _=Depends(login_required)):
+    """Batch update all channels in cache."""
+    body = await request.json()
+    ch_list = body.get("channels")
+    if not ch_list or not isinstance(ch_list, list):
+        raise HTTPException(status_code=400, detail="No channels provided")
+    _set_channels(ch_list)
+    user = get_current_user(request)
+    logger.info(f"Batch update: {len(ch_list)} channels by {user}")
+    return {"ok": True}

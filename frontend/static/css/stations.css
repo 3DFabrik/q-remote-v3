@@ -418,3 +418,16 @@
 .code-editor input {
     width: 40px;
 }
+
+/* Row operation buttons (↑ ↓ − +) */
+.action-buttons .row-op-btn {
+    min-width: 28px !important;
+    padding: 3px 6px !important;
+}
+
+/* Fix: Import CSV label vertical centering (label vs button difference) */
+.action-buttons .import-label {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}

@@ -6,7 +6,7 @@
     <title>Q-Remote V3 — Stations Editor</title>
     <link rel="icon" type="image/png" href="/static/favicon.png">
     <link rel="stylesheet" href="/static/css/style.css?v=10">
-    <link rel="stylesheet" href="/static/css/stations.css">
+    <link rel="stylesheet" href="/static/css/stations.css?v=2">
 </head>
 <body>
     <div id="app" class="stations-app">
@@ -43,8 +43,10 @@
                 </label>
                 <span class="action-sep"></span>
                 <button id="btn-filter" class="radio-btn filter-btn active" data-filter="used" title="Toggle filter">Used</button>
-                <span class="action-sep"></span>
-                <span class="channel-count"><strong id="count-used">0</strong>/<strong id="count-total">200</strong></span>
+                <button id="btn-up" class="radio-btn filter-btn row-op-btn" title="Move channel up">↑</button>
+                <button id="btn-down" class="radio-btn filter-btn row-op-btn" title="Move channel down">↓</button>
+                <button id="btn-del" class="radio-btn filter-btn row-op-btn" title="Delete channel">−</button>
+                <button id="btn-add" class="radio-btn filter-btn row-op-btn" title="Insert new channel above">+</button>
             </div>
 
             <!-- Progress Bar -->
