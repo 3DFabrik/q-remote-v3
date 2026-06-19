@@ -199,6 +199,7 @@ function setupButtons() {
 function setupPTT() {
     pttBtn.addEventListener("pointerdown", (e) => {
         e.preventDefault();
+        rxAudio.muted = true;  // mute immediately to prevent self-echo
         control.pttOn();
         txAudio.startTransmit();
     });
