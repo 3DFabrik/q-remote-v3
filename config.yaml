@@ -30,3 +30,9 @@ auth:
 logging:
   level: "DEBUG"               # DEBUG, INFO, WARNING, ERROR
   format: "text"              # "json" or "text"
+
+# GPIO configuration (see docs/SPEC-GPIO.md)
+# Pin definitions are managed via the admin API and persisted in config.local.yaml.
+# This section only provides defaults; runtime config lives in config.local.yaml.
+gpio:
+  pins: []   # Empty = no GPIO pins configured

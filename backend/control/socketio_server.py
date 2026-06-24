@@ -15,6 +15,7 @@ from backend.radio.connection import RadioConnection
 from backend.radio.protocol import Packet
 from backend.radio.lcd import LCDDisplay
 from backend.auth import USERS, SECRET_KEY, log_activity, touch_activity, check_timeout, clear_activity
+from backend.gpio import manager as gpio_manager
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +144,8 @@ async def _on_radio_connect():
 async def _on_radio_disconnect():
     global _ptt_owner
     _ptt_owner = None
+    import asyncio as _a
+    _a.create_task(gpio_manager.on_ptt(False))
     await sio.emit('radio_state', {'state': 'disconnected'})
 
 
@@ -228,6 +231,7 @@ async def ptt_on(sid, data=None):
     await asyncio.sleep(0.1)
     freq = await radio.read_frequency() or 'N/A'
     log_activity(user, 'PTT_ON', f'freq={freq}')
+    await gpio_manager.on_ptt(True)
     await sio.emit('ptt_status', {'active': True, 'holder': sid, 'user': user})
     if lcd:
         await asyncio.sleep(0.15)
@@ -248,6 +252,7 @@ async def _drain_and_release(sid):
     try:
         await asyncio.sleep(_PTT_DRAIN_DELAY)
         logger.info("PTT drain complete, releasing")
+        await gpio_manager.on_ptt(False)
     except asyncio.CancelledError:
         logger.info("PTT drain cancelled (re-pressed)")
         return

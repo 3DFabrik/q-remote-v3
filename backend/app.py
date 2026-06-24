@@ -20,6 +20,7 @@ import backend.control.socketio_server as _sio_mod
 from backend.audio.rx_pipeline import RxPipeline
 from backend.audio.tx_pipeline import TxPipeline
 from backend.stations.router import stations_router
+from backend.gpio import manager as gpio_manager
 from backend.auth import (
     SECRET_KEY, USERS, load_users, save_users, log_activity,
     get_current_user, get_ws_user, is_admin, login_required, admin_required,
@@ -60,8 +61,15 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("Radio not available")
 
+    # GPIO initialization (fail-safe: all pins OFF, independent of radio)
+    try:
+        await gpio_manager.initialize()
+    except Exception as e:
+        logger.warning(f"GPIO init failed (non-Pi or no gpiozero?): {e}")
+
     yield
 
+    gpio_manager.cleanup()
     logger.info("Shutting down...")
     rx_audio.stop()
     tx_audio.stop()
@@ -91,6 +99,8 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
 
 app.include_router(stations_router)
+from backend.gpio import router as gpio_router
+app.include_router(gpio_router)
 
 import socketio as sio_module
 asgi_app = sio_module.ASGIApp(sio, other_asgi_app=app, socketio_path='socket.io')
@@ -124,6 +134,7 @@ async def heartbeat(request: Request):
         request.session.pop("user", None)
         clear_activity(user)
         log_activity(user, "TIMEOUT_LOGOUT")
+        gpio_manager.on_session_logout()
         return JSONResponse({"status": "expired"}, status_code=401)
     touch_activity(user)
     timeout_min = get_user_timeout_minutes(user) if user else 0
@@ -138,6 +149,7 @@ async def tab_close(request: Request):
     if user:
         clear_activity(user)
         log_activity(user, "TAB_CLOSE_LOGOUT")
+        gpio_manager.on_session_logout()
     return {"status": "ok"}
 
 
@@ -161,6 +173,7 @@ async def login_submit(request: Request):
         request.session["user"] = username
         touch_activity(username)
         log_activity(username, "LOGIN")
+        gpio_manager.on_session_login()
         return RedirectResponse(url="/", status_code=303)
     return HTMLResponse(jinja_env.get_template("login.html").render(request=request, error="Ungültige Anmeldedaten"))
 
@@ -172,6 +185,7 @@ async def logout(request: Request):
     if user:
         clear_activity(user)
         log_activity(user, "LOGOUT")
+        gpio_manager.on_session_logout()
     return RedirectResponse(url="/login", status_code=303)
 
 
