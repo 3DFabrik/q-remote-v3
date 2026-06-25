@@ -295,7 +295,6 @@
                             <th>Logic</th>
                             <th>Trigger</th>
                             <th>Parameter</th>
-                            <th style="text-align:center">Temp</th>
                             <th style="text-align:center">Session</th>
                             <th></th>
                         </tr>
@@ -486,13 +485,10 @@
 
         var sc = row.session_bound ? ' checked' : '';
         var sd = isInput ? ' disabled' : '';
-        var tc = isDS18B20 ? (row.show_temp ? ' checked' : '') : '';
-        var td = isDS18B20 ? '' : ' disabled';
         return '<tr><td class="col-pin"><select onchange="gpioUpdateParam(' + idx + ',\'bcm_pin\',parseInt(this.value))">' + pinOpts + '</select></td>' +
             '<td class="col-dir">' + dirHtml + '</td>' +
             '<td class="col-trig">' + trigHtml + '</td>' +
             '<td class="col-param">' + paramHtml + '</td>' +
-            '<td class="col-session"><input type="checkbox"' + tc + td + ' onchange="gpioUpdateParam(' + idx + ',\'show_temp\',this.checked)"></td>' +
             '<td class="col-session"><input type="checkbox"' + sc + sd + ' onchange="gpioToggleSession(' + idx + ')"></td>' +
             '<td class="col-del"><button class="btn btn-delete" style="padding:2px 6px;font-size:0.6rem" onclick="gpioRemoveRow(' + idx + ')">\u2715</button></td></tr>';
     }
