@@ -457,8 +457,18 @@
         if (isInput) {
             trigHtml = '<span class="hint">' + (row.input_type || '').toUpperCase() + '</span>';
         } else {
+            // Collect button triggers used by other rows
+            var usedButtons = new Set();
+            rows.forEach(function(r, j) {
+                if (j !== idx && (r.trigger === 'button1' || r.trigger === 'button2')) {
+                    usedButtons.add(r.trigger);
+                }
+            });
             trigHtml = '<select onchange="gpioUpdateTrigger(' + idx + ',this.value)"><option value="">\u2014</option>' +
-                TRIGGERS.map(function(t){ return '<option value="' + t.value + '"' + s(t.value, row.trigger) + '>' + t.label + '</option>'; }).join('') + '</select>';
+                TRIGGERS.map(function(t) {
+                    var isBtnDisabled = (t.value === 'button1' || t.value === 'button2') && usedButtons.has(t.value) && t.value !== row.trigger;
+                    return '<option value="' + t.value + '"' + s(t.value, row.trigger) + d(isBtnDisabled) + '>' + t.label + '</option>';
+                }).join('') + '</select>';
         }
 
         var paramHtml = '<span class="hint">\u2014</span>';

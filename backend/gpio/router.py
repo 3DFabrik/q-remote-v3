@@ -166,6 +166,18 @@ async def save_gpio_config(request: Request, _=Depends(admin_required)):
             if i != j and other.get("bcm_pin") == bcm:
                 return JSONResponse({"error": f"Duplicate bcm_pin {bcm}"}, status_code=400)
 
+    # Check duplicate button triggers (each header button can only be assigned once)
+    seen_buttons = set()
+    for pin_cfg in pins:
+        trigger = pin_cfg.get("trigger", "")
+        if trigger in ("button1", "button2"):
+            if trigger in seen_buttons:
+                return JSONResponse(
+                    {"error": f"Trigger '{trigger}' is already assigned to another pin (each button can only be used once)"},
+                    status_code=400,
+                )
+            seen_buttons.add(trigger)
+
     # Validate logic_level
     for pin_cfg in pins:
         if pin_cfg.get("logic_level") not in ("active_high", "active_low", None, ""):
