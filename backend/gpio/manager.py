@@ -9,7 +9,10 @@ Spec: docs/SPEC-GPIO.md
 
 import asyncio
 import logging
+import os
+import re
 from dataclasses import dataclass, asdict
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -377,6 +380,74 @@ class GPIOManager:
                     "session_bound": cfg.session_bound,
                 }
         return info
+
+    # --- Temperature Sensors (DS18B20) ---
+
+    def get_temperatures(self) -> list[dict]:
+        """Read all configured DS18B20 sensors and return their current values.
+
+        Returns a list of dicts: [{name, id, temp, pin, error?}, ...]
+        Reads from /sys/bus/w1/devices/<sensor_id>/w1_slave (standard 1-Wire).
+        """
+        results = []
+        w1_base = Path("/sys/bus/w1/devices")
+
+        for cfg in self._configs:
+            if cfg.input_type != "ds18b20":
+                continue
+
+            entry = {
+                "name": cfg.sensor_name or f"Sensor-{cfg.bcm_pin}",
+                "id": cfg.sensor_id or "",
+                "pin": cfg.bcm_pin,
+                "temp": None,
+            }
+
+            # Determine sensor_id: explicit config or auto-detect
+            sensor_id = cfg.sensor_id
+
+            if not sensor_id and w1_base.exists():
+                for dev_dir in w1_base.iterdir():
+                    if dev_dir.name.startswith("28-"):
+                        sensor_id = dev_dir.name
+                        break
+
+            if not sensor_id:
+                entry["error"] = "No 1-Wire device found (1-Wire disabled?)"
+                results.append(entry)
+                continue
+
+            entry["id"] = sensor_id
+            w1_file = w1_base / sensor_id / "w1_slave"
+
+            if not w1_file.exists():
+                entry["error"] = "Sensor file not found"
+                results.append(entry)
+                continue
+
+            try:
+                raw = w1_file.read_text().strip()
+                lines = raw.split("\n")
+
+                if lines and "YES" not in lines[0]:
+                    entry["error"] = "CRC check failed"
+                    results.append(entry)
+                    continue
+
+                m = re.search(r"t=(-?\d+)", raw)
+                if m:
+                    temp_raw = int(m.group(1))
+                    temp_c = round(temp_raw / 1000.0, 1)
+                    entry["temp"] = temp_c
+                else:
+                    entry["error"] = "Could not parse temperature"
+
+            except Exception as e:
+                entry["error"] = f"Read error: {e}"
+
+            results.append(entry)
+
+        return results
 
     @property
     def initialized(self) -> bool:

@@ -236,6 +236,19 @@ async def toggle_button(button_id: str, request: Request, _=Depends(login_requir
     return {"status": "ok", "button": button_id, "active": active, "buttons": manager.get_button_info()}
 
 
+# ─── Temperature Sensors (DS18B20) ────────────────────────────────
+
+@router.get("/temperatures")
+async def get_temperatures(request: Request, _=Depends(login_required)):
+    """Return current temperature readings from all configured DS18B20 sensors.
+
+    Returns: {"sensors": [{name, id, temp, pin, error?}, ...]}
+    Temperature is in °C with 1 decimal precision, or null if unreadable.
+    """
+    sensors = manager.get_temperatures()
+    return {"sensors": sensors}
+
+
 # ─── Initialization ──────────────────────────────────────────────
 
 @router.post("/reinit")
