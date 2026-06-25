@@ -17,18 +17,34 @@ logger = logging.getLogger(__name__)
 # ─── Constants ─────────────────────────────────────────────────────
 
 # BCM pins reserved for system functions (never available to user)
-# I2C bus – used for temperature sensors etc.
-SYSTEM_RESERVED = {2, 3}
+SYSTEM_RESERVED = {2, 3}  # I2C bus
 
-# UART pins – reserved only if serial console is active.
-# We include them in available list; backend can optionally filter.
-UART_PINS = {14, 15}
+# UART pins – reserved (serial console / Bluetooth)
+UART_PINS = {14, 15}  # TXD, RXD
+
+# DS18B20 1-Wire – only BCM 4 (physical pin 7) supports 1-Wire
+DS18B20_PIN = 4
+
+# Soft-reserved: pins with special hardware functions
+# (SPI0, PWM, PCM/I2S) — excluded from output for safety
+SOFT_RESERVED = {7, 8, 9, 10, 11,  # SPI0 (CE1, CE0, MISO, MOSI, SCLK)
+                 12, 13,           # Hardware PWM0, PWM1
+                 18, 19, 20, 21}   # PCM/I2S (CLK, FS, DIN, DOUT)
+
+# All hard-reserved (system + UART)
+HARD_RESERVED = SYSTEM_RESERVED | UART_PINS
+
+# Everything that's NOT available for output
+ALL_RESERVED = HARD_RESERVED | SOFT_RESERVED | {DS18B20_PIN}
 
 # All user-accessible BCM GPIO pins on 40-pin header
 ALL_PINS = [
     4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
 ]
+
+# Pins available for OUTPUT use
+OUTPUT_PINS = [p for p in ALL_PINS if p not in ALL_RESERVED]
 
 # Trigger type constants (match spec column 3)
 TRIGGER_PTT = "ptt"
@@ -186,9 +202,9 @@ class GPIOManager:
         return [c.to_dict() for c in self._configs]
 
     def get_available_pins(self) -> list[int]:
-        """Return BCM pins available for assignment (not system-reserved, not configured)."""
+        """Return BCM pins available for output assignment (not reserved, not configured)."""
         configured = {c.bcm_pin for c in self._configs}
-        return [p for p in ALL_PINS if p not in SYSTEM_RESERVED and p not in configured]
+        return [p for p in OUTPUT_PINS if p not in configured]
 
     # ─── Lifecycle ──────────────────────────────────
 
@@ -198,8 +214,11 @@ class GPIOManager:
         self.reload_from_config()
 
         for cfg in self._configs:
-            if cfg.bcm_pin in SYSTEM_RESERVED:
-                logger.warning(f"Pin {cfg.bcm_pin} is system-reserved (I2C), skipping")
+            if cfg.bcm_pin in HARD_RESERVED:
+                logger.warning(f"Pin {cfg.bcm_pin} is hard-reserved, skipping")
+                continue
+            if cfg.direction == "output" and cfg.bcm_pin in ALL_RESERVED:
+                logger.warning(f"Pin {cfg.bcm_pin} is soft-reserved, skipping for output")
                 continue
 
             try:

@@ -16,7 +16,11 @@ import yaml
 
 from backend.auth import admin_required, login_required
 from backend.config import load_config, get, _PROJECT_ROOT
-from backend.gpio.manager import manager, ALL_PINS, SYSTEM_RESERVED, TRIGGER_LABELS
+from backend.gpio.manager import (
+    manager, ALL_PINS, SYSTEM_RESERVED, TRIGGER_LABELS,
+    OUTPUT_PINS, ALL_RESERVED, HARD_RESERVED, SOFT_RESERVED,
+    UART_PINS, DS18B20_PIN,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,20 +46,54 @@ def _save_gpio_config(pin_dicts: list[dict]):
     load_config(force_reload=True)
 
 
+# ─── Pin Validation Helpers ────────────────────────────────────────
+
+# Reverse lookup maps for _reserved_reason
+_PIN_GROUPS = [
+    ("I2C bus", SYSTEM_RESERVED),
+    ("UART (TXD/RXD)", UART_PINS),
+    ("1-Wire (DS18B20)", {DS18B20_PIN}),
+    ("SPI0", {7, 8, 9, 10, 11}),
+    ("Hardware PWM", {12, 13}),
+    ("PCM/I2S", {18, 19, 20, 21}),
+]
+
+
+def _reserved_reason(bcm: int) -> str:
+    """Return a human-readable reason why a pin is reserved, or '' if not reserved."""
+    for label, group in _PIN_GROUPS:
+        if bcm in group:
+            return label
+    return ''
+
+
 # ─── Pin Discovery ─────────────────────────────────────────────────
 
 @router.get("/pins")
 async def get_pins(request: Request, _=Depends(admin_required)):
     """Return available BCM pins for GPIO assignment.
 
-    Excludes system-reserved pins (I2C etc.).
+    Marks all reserved pins (I2C, UART, SPI, PWM, PCM, 1-Wire) as unavailable.
     """
     configured = {c["bcm_pin"] for c in manager.get_configs()}
-    pins = [
-        {"bcm": p, "available": p not in configured, "reserved": p in SYSTEM_RESERVED}
-        for p in ALL_PINS
-    ]
-    return {"pins": pins, "reserved": sorted(SYSTEM_RESERVED)}
+    pins = []
+    for p in ALL_PINS:
+        is_reserved = p in ALL_RESERVED
+        is_configured = p in configured
+        pins.append({
+            "bcm": p,
+            "available": not is_reserved and not is_configured,
+            "reserved": is_reserved,
+            "reason": _reserved_reason(p) if is_reserved else "",
+        })
+    return {
+        "pins": pins,
+        "reserved": sorted(ALL_RESERVED),
+        "hard_reserved": sorted(HARD_RESERVED),
+        "soft_reserved": sorted(SOFT_RESERVED),
+        "output_pins": OUTPUT_PINS,
+        "ds18b20_pin": DS18B20_PIN,
+    }
 
 
 @router.get("/triggers")
@@ -95,8 +133,33 @@ async def save_gpio_config(request: Request, _=Depends(admin_required)):
         bcm = pin_cfg.get("bcm_pin")
         if not isinstance(bcm, int) or bcm not in ALL_PINS:
             return JSONResponse({"error": f"pins[{i}].bcm_pin invalid: {bcm}"}, status_code=400)
-        if bcm in SYSTEM_RESERVED:
-            return JSONResponse({"error": f"pins[{i}].bcm_pin {bcm} is system-reserved"}, status_code=400)
+
+        direction = pin_cfg.get("direction", "output")
+        input_type = pin_cfg.get("input_type", "")
+
+        # Hard-reserved pins (I2C, UART) are never allowed
+        if bcm in HARD_RESERVED:
+            reason = _reserved_reason(bcm)
+            return JSONResponse(
+                {"error": f"pins[{i}].bcm_pin {bcm} is reserved ({reason})"},
+                status_code=400,
+            )
+
+        # DS18B20 input: only BCM 4 is allowed
+        if direction == "input" and input_type == "ds18b20":
+            if bcm != DS18B20_PIN:
+                return JSONResponse(
+                    {"error": f"pins[{i}].bcm_pin {bcm}: DS18B20 requires BCM {DS18B20_PIN}"},
+                    status_code=400,
+                )
+        elif direction == "output":
+            # Output pins must not be in ALL_RESERVED
+            if bcm in ALL_RESERVED:
+                reason = _reserved_reason(bcm)
+                return JSONResponse(
+                    {"error": f"pins[{i}].bcm_pin {bcm} is reserved ({reason})"},
+                    status_code=400,
+                )
 
         # Check duplicate pins
         for j, other in enumerate(pins):

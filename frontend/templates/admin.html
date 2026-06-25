@@ -323,7 +323,11 @@
         { value: 'temp', label: 'Temperatur-Schwellenwert' },
     ];
     var ALL_PINS = [4,5,6,7,8,9,10,11,12,13,16,17,18,19,20,21,22,23,24,25,26,27];
-    var RESERVED = new Set([2, 3]);
+    var HARD_RESERVED = new Set([2, 3, 14, 15]); // I2C + UART
+    var SOFT_RESERVED = new Set([7, 8, 9, 10, 11, 12, 13, 18, 19, 20, 21]); // SPI/PWM/PCM
+    var DS18B20_PIN = 4;
+    var ALL_RESERVED = new Set([].concat(Array.from(HARD_RESERVED), Array.from(SOFT_RESERVED), [DS18B20_PIN]));
+    var RESERVED = ALL_RESERVED; // backward compat for save validation
     var BANDS = ['2m','70cm','23cm','13cm','9cm','6m','10m','15m','20m','40m','80m','160m'];
     var rows = [];
 
@@ -337,7 +341,9 @@
     window.gpioAddRow = function(direction) {
         direction = direction || 'output';
         var usedPins = new Set(rows.map(function(r){ return r.bcm_pin; }));
-        var nextPin = ALL_PINS.find(function(p){ return !usedPins.has(p) && !RESERVED.has(p); }) || 4;
+        // For output: find first non-reserved, non-used pin
+        var outputCandidates = ALL_PINS.filter(function(p){ return !ALL_RESERVED.has(p) && !usedPins.has(p); });
+        var nextPin = (direction === 'output' ? outputCandidates[0] : (usedPins.has(DS18B20_PIN) ? null : DS18B20_PIN)) || outputCandidates[0] || 5;
         rows.push({
             bcm_pin: nextPin, direction: direction, input_type: direction === 'input' ? 'ds18b20' : '',
             sensor_name: '', sensor_id: '', logic_level: 'active_low', output_mode: 'push_pull',
@@ -351,7 +357,14 @@
 
     window.gpioSave = async function() {
         for (var i = 0; i < rows.length; i++) {
-            if (RESERVED.has(rows[i].bcm_pin)) { gpioStatus('ERROR: Pin ' + rows[i].bcm_pin + ' reserviert'); return; }
+            var r = rows[i];
+            if (HARD_RESERVED.has(r.bcm_pin)) { gpioStatus('ERROR: Pin ' + r.bcm_pin + ' hard-reserviert'); return; }
+            if (r.direction === 'input' && r.input_type === 'ds18b20' && r.bcm_pin !== DS18B20_PIN) {
+                gpioStatus('ERROR: DS18B20 ben\u00f6tigt GPIO ' + DS18B20_PIN); return;
+            }
+            if (r.direction === 'output' && ALL_RESERVED.has(r.bcm_pin)) {
+                gpioStatus('ERROR: Pin ' + r.bcm_pin + ' reserviert f\u00fcr Output'); return;
+            }
         }
         var outputPins = {};
         for (var i = 0; i < rows.length; i++) {
@@ -403,12 +416,31 @@
     function s(cur, val) { return val === cur ? ' selected' : ''; }
     function d(cond) { return cond ? ' disabled' : ''; }
 
+    function _pinLabel(p) {
+        var reasons = {'2':'I2C','3':'I2C','14':'UART','15':'UART','4':'1-Wire',
+            '7':'SPI0','8':'SPI0','9':'SPI0','10':'SPI0','11':'SPI0',
+            '12':'PWM','13':'PWM','18':'PCM','19':'PCM','20':'PCM','21':'PCM'};
+        return reasons[String(p)] || null;
+    }
+
     function renderRow(row, idx) {
         var isInput = row.direction === 'input';
+        var isDS18B20 = isInput && row.input_type === 'ds18b20';
         var usedOut = new Set(rows.filter(function(_, i){ return i !== idx && rows[i].direction === 'output'; }).map(function(r){ return r.bcm_pin; }));
         var pinOpts = ALL_PINS.map(function(p) {
-            var label = RESERVED.has(p) ? 'GPIO ' + p + ' (I2C)' : usedOut.has(p) ? 'GPIO ' + p + ' \u25b8' : 'GPIO ' + p;
-            var isDis = (RESERVED.has(p) || (usedOut.has(p) && !isInput)) && p !== row.bcm_pin;
+            var reason = _pinLabel(p);
+            var label = 'GPIO ' + p;
+            if (reason) label += ' (' + reason + ')';
+            else if (usedOut.has(p)) label += ' \u25b8';
+            // For DS18B20 input: only BCM 4 is allowed
+            // For output: all ALL_RESERVED pins are disabled
+            // Already-configured pins by other rows: disabled (unless input)
+            var isDis = false;
+            if (p !== row.bcm_pin) {
+                if (isDS18B20 && p !== DS18B20_PIN) isDis = true;
+                else if (!isInput && ALL_RESERVED.has(p)) isDis = true;
+                else if (usedOut.has(p) && !isInput) isDis = true;
+            }
             return '<option value="' + p + '"' + s(p, row.bcm_pin) + d(isDis) + '>' + label + '</option>';
         }).join('');
 
