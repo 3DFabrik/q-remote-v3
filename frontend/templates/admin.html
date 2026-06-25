@@ -182,7 +182,7 @@
         #gpio-table .col-pin { width: 80px; }
         #gpio-table .col-dir { width: 130px; }
         #gpio-table .col-trig { width: 155px; }
-        #gpio-table .col-param { min-width: 170px; }
+        #gpio-table .col-param { min-width: 220px; }
         #gpio-table .col-session { width: 40px; text-align: center; }
         #gpio-table .col-del { width: 35px; text-align: center; }
         #gpio-table select, #gpio-table input[type="text"], #gpio-table input[type="number"] { background: var(--bg); border: 1px solid var(--panel-border); color: var(--phosphor); padding: 3px 4px; border-radius: 3px; font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; }
@@ -463,8 +463,8 @@
 
         var paramHtml = '<span class="hint">\u2014</span>';
         if (isInput && row.input_type === 'ds18b20') {
-            paramHtml = '<input type="text" value="' + (row.sensor_name || '') + '" placeholder="Sensor-Name" onchange="gpioUpdateParam(' + idx + ',\'sensor_name\',this.value)">' +
-                '<label style="display:flex;align-items:center;gap:2px;font-size:0.6rem;color:#706858;"><input type="checkbox"' + (row.show_temp ? ' checked' : '') + ' onchange="gpioUpdateParam(' + idx + ',\'show_temp\',this.checked)"> anzeigen</label>';
+            paramHtml = '<div style="display:flex;align-items:center;gap:4px"><input type="text" style="flex:1;min-width:0" value="' + (row.sensor_name || '') + '" placeholder="Sensor-Name" onchange="gpioUpdateParam(' + idx + ',\'sensor_name\',this.value)">' +
+                '<label style="display:flex;align-items:center;gap:2px;font-size:0.6rem;color:#706858;white-space:nowrap;"><input type="checkbox"' + (row.show_temp ? ' checked' : '') + ' onchange="gpioUpdateParam(' + idx + ',\'show_temp\',this.checked)"> anzeigen</label></div>';
         } else if (!isInput) {
             if (row.trigger === 'button1' || row.trigger === 'button2') {
                 paramHtml = '<input type="text" value="' + (row.button_label || '') + '" placeholder="Label" onchange="gpioUpdateParam(' + idx + ',\'button_label\',this.value)">';
