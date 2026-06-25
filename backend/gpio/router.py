@@ -14,7 +14,7 @@ from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
 import yaml
 
-from backend.auth import admin_required
+from backend.auth import admin_required, login_required
 from backend.config import load_config, get, _PROJECT_ROOT
 from backend.gpio.manager import manager, ALL_PINS, SYSTEM_RESERVED, TRIGGER_LABELS
 
@@ -105,7 +105,7 @@ async def save_gpio_config(request: Request, _=Depends(admin_required)):
 
     # Validate logic_level
     for pin_cfg in pins:
-        if pin_cfg.get("logic_level") not in ("active_high", "active_low", None):
+        if pin_cfg.get("logic_level") not in ("active_high", "active_low", None, ""):
             return JSONResponse(
                 {"error": f"Invalid logic_level for pin {pin_cfg.get('bcm_pin')}"},
                 status_code=400,
@@ -134,13 +134,13 @@ async def get_gpio_status(request: Request, _=Depends(admin_required)):
 # ─── Header Button Control ────────────────────────────────────────
 
 @router.get("/buttons")
-async def get_button_info(request: Request, _=Depends(admin_required)):
+async def get_button_info(request: Request, _=Depends(login_required)):
     """Return header button labels and states for frontend top-bar."""
     return {"buttons": manager.get_button_info()}
 
 
 @router.post("/button/{button_id}")
-async def toggle_button(button_id: str, request: Request, _=Depends(admin_required)):
+async def toggle_button(button_id: str, request: Request, _=Depends(login_required)):
     """Toggle a header button (button1 or button2).
 
     Body: {"active": true/false}
@@ -161,6 +161,14 @@ async def toggle_button(button_id: str, request: Request, _=Depends(admin_requir
 
     from backend.auth import log_activity, get_current_user
     log_activity(get_current_user(request), "GPIO_BUTTON", f"{button_id}={'ON' if active else 'OFF'}")
+
+    # Broadcast to all connected clients so button states stay in sync
+    try:
+        from backend.control.socketio_server import sio
+        import asyncio
+        asyncio.ensure_future(sio.emit("gpio_buttons", {"buttons": manager.get_button_info()}))
+    except Exception:
+        pass
 
     return {"status": "ok", "button": button_id, "active": active, "buttons": manager.get_button_info()}
 

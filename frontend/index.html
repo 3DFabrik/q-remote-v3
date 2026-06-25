@@ -40,6 +40,16 @@
             </div>
         </header>
 
+        <!-- GPIO Button Bar -->
+        <div id="gpio-bar" class="gpio-bar" style="display:none;">
+            <button id="gpio-btn-1" class="gpio-toggle-btn" style="display:none;" onclick="toggleGpioBtn('button1')">
+                <span class="gpio-btn-label"></span>
+            </button>
+            <button id="gpio-btn-2" class="gpio-toggle-btn" style="display:none;" onclick="toggleGpioBtn('button2')">
+                <span class="gpio-btn-label"></span>
+            </button>
+        </div>
+
         <!-- CRT Display Panel -->
         <div id="crt-bezel" class="instrument-panel">
             <div class="panel-label">Display — CRT Type 564</div>
@@ -96,6 +106,7 @@
 
     <script type="module" src="/static/js/app.js?v=4.2"></script>
 
+
 <script>
 (function() {
     if (window.CURRENT_USER) {
@@ -106,5 +117,77 @@
     }
 })();
 </script>
+<script>
+    // ─── GPIO Button Bar ─────────────────────────────
+    async function loadGpioButtons() {
+        try {
+            const resp = await fetch('/api/gpio/buttons');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const buttons = data.buttons || {};
+            let visible = 0;
+
+            for (const id of ['button1', 'button2']) {
+                const btn = document.getElementById('gpio-btn-' + id.charAt(6));
+                const info = buttons[id];
+                if (info && info.label) {
+                    btn.querySelector('.gpio-btn-label').textContent = info.label;
+                    btn.style.display = 'flex';
+                    btn.classList.toggle('active', !!info.active);
+                    visible++;
+                } else {
+                    btn.style.display = 'none';
+                }
+            }
+
+            const bar = document.getElementById('gpio-bar');
+            bar.style.display = visible > 0 ? 'flex' : 'none';
+        } catch(e) {
+            console.warn('GPIO buttons load failed:', e);
+        }
+    }
+
+    async function toggleGpioBtn(buttonId) {
+        const btnNum = buttonId === 'button1' ? '1' : '2';
+        const btn = document.getElementById('gpio-btn-' + btnNum);
+        const isActive = btn.classList.contains('active');
+        const newState = !isActive;
+
+        try {
+            const resp = await fetch('/api/gpio/button/' + buttonId, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ active: newState })
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                btn.classList.toggle('active', newState);
+            }
+        } catch(e) {
+            console.warn('GPIO button toggle failed:', e);
+        }
+    }
+
+    // Load buttons after page init
+    document.addEventListener('DOMContentLoaded', loadGpioButtons);
+
+    function updateGpioButtons(buttons) {
+        let visible = 0;
+        for (const id of ['button1', 'button2']) {
+            const btn = document.getElementById('gpio-btn-' + id.charAt(6));
+            const info = buttons[id];
+            if (info && info.label) {
+                btn.querySelector('.gpio-btn-label').textContent = info.label;
+                btn.style.display = 'flex';
+                btn.classList.toggle('active', !!info.active);
+                visible++;
+            } else {
+                btn.style.display = 'none';
+            }
+        }
+        document.getElementById('gpio-bar').style.display = visible > 0 ? 'flex' : 'none';
+    }
+    </script>
+
 </body>
 </html>
