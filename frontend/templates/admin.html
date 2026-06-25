@@ -319,7 +319,6 @@
         { value: 'ptt', label: 'Bei TX (PTT)' },
         { value: 'button1', label: 'Kopfzeilen-Button 1' },
         { value: 'button2', label: 'Kopfzeilen-Button 2' },
-        { value: 'band', label: 'Band-Decoder (CAT)' },
         { value: 'temp', label: 'Temperatur-Schwellenwert' },
     ];
     var ALL_PINS = [4,5,6,7,8,9,10,11,12,13,16,17,18,19,20,21,22,23,24,25,26,27];
@@ -328,7 +327,6 @@
     var DS18B20_PIN = 4;
     var ALL_RESERVED = new Set([].concat(Array.from(HARD_RESERVED), Array.from(SOFT_RESERVED), [DS18B20_PIN]));
     var RESERVED = ALL_RESERVED; // backward compat for save validation
-    var BANDS = ['2m','70cm','23cm','13cm','9cm','6m','10m','15m','20m','40m','80m','160m'];
     var rows = [];
     var _sensorStatus = {};
 
@@ -501,9 +499,6 @@
             } else if (row.trigger === 'ptt') {
                 paramHtml = '<div class="gpio-param-wrap"><input type="number" value="' + row.sequencer_delay_ms + '" min="0" max="5000" onchange="gpioUpdateParam(' + idx + ',\'sequencer_delay_ms\',this.value)"> ms' +
                     '<select onchange="gpioUpdateParam(' + idx + ',\'ptt_combo_button\',this.value)"><option value="">solo</option><option value="button1"' + s('button1', row.ptt_combo_button) + '>Btn1</option><option value="button2"' + s('button2', row.ptt_combo_button) + '>Btn2</option></select></div>';
-            } else if (row.trigger === 'band') {
-                paramHtml = '<select onchange="gpioUpdateParam(' + idx + ',\'band\',this.value)"><option value="">\u2014</option>' +
-                    BANDS.map(function(b){ return '<option value="' + b + '"' + s(b, row.band) + '>' + b + '</option>'; }).join('') + '</select>';
             } else if (row.trigger === 'temp') {
                 var srcs = rows.filter(function(r,j){ return j !== idx && r.direction === 'input' && r.input_type === 'ds18b20' && r.sensor_name; }).map(function(r){ return r.sensor_name; });
                 var srcOpts = srcs.length ? '<option value="">\u2014</option>' + srcs.map(function(n){ return '<option value="' + n + '"' + s(n, row.temp_source) + '>' + n + '</option>'; }).join('') : '<option value="">kein Sensor</option>';

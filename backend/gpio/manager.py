@@ -53,19 +53,17 @@ OUTPUT_PINS = [p for p in ALL_PINS if p not in ALL_RESERVED]
 TRIGGER_PTT = "ptt"
 TRIGGER_BUTTON_1 = "button1"
 TRIGGER_BUTTON_2 = "button2"
-TRIGGER_BAND = "band"
 TRIGGER_TEMP = "temp"
 
 ALL_TRIGGERS = [
     TRIGGER_PTT, TRIGGER_BUTTON_1, TRIGGER_BUTTON_2,
-    TRIGGER_BAND, TRIGGER_TEMP,
+    TRIGGER_TEMP,
 ]
 
 TRIGGER_LABELS = {
     TRIGGER_PTT: "Bei TX (PTT)",
     TRIGGER_BUTTON_1: "Kopfzeilen-Button 1",
     TRIGGER_BUTTON_2: "Kopfzeilen-Button 2",
-    TRIGGER_BAND: "Band-Decoder (CAT)",
     TRIGGER_TEMP: "Temperatur-Schwellenwert",
 }
 
@@ -188,6 +186,7 @@ class GPIOManager:
         self._ptt_active = False
         self._active_sessions = 0
         self._initialized = False
+        self._temp_task = None
 
     # ─── Config ─────────────────────────────────────
 
@@ -240,10 +239,126 @@ class GPIOManager:
         self._initialized = True
         # Ensure all OFF (redundant, but explicit = safe)
         self.all_off()
+        # Start temperature monitor for temp-trigger pins
+        self._start_temp_monitor()
         logger.info(f"GPIO manager initialized ({len(self._handles)} pins active)")
+
+
+    def _start_temp_monitor(self):
+        """Start (or restart) the temperature monitor background task."""
+        self._stop_temp_monitor()
+        # Only start if there are temp-trigger pins
+        has_temp = any(
+            c.trigger == TRIGGER_TEMP
+            for c in self._configs
+        )
+        if has_temp:
+            self._temp_task = asyncio.create_task(self._temp_monitor_loop())
+            logger.info("Temperature monitor task started (5s interval)")
+        else:
+            logger.debug("No temp-trigger pins configured, temp monitor not started")
+
+    def _stop_temp_monitor(self):
+        """Stop the temperature monitor background task if running."""
+        if self._temp_task and not self._temp_task.done():
+            self._temp_task.cancel()
+            logger.info("Temperature monitor task stopped")
+        self._temp_task = None
+
+    async def _temp_monitor_loop(self):
+        """Background loop: evaluate temp-trigger pins every 5 seconds."""
+        logger.info("Temperature monitor loop running")
+        while True:
+            try:
+                await asyncio.sleep(5)
+                self._evaluate_temp_triggers()
+            except asyncio.CancelledError:
+                logger.info("Temperature monitor loop cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Temperature monitor error: {e}", exc_info=True)
+
+    def _read_sensor_temp(self, sensor_id, w1_base):
+        """Read temperature from a DS18B20 sensor. Returns float or None."""
+        w1_file = w1_base / sensor_id / "w1_slave"
+        if not w1_file.exists():
+            return None
+        raw = w1_file.read_text().strip()
+        lines = raw.split("\n")
+        if lines and "YES" not in lines[0]:
+            return None
+        m = re.search(r"t=(-?\d+)", raw)
+        if m:
+            return round(int(m.group(1)) / 1000.0, 1)
+        return None
+
+    def _evaluate_temp_triggers(self):
+        """Check all temp-trigger pins against their sensor thresholds."""
+        w1_base = Path("/sys/bus/w1/devices")
+        temp_cache = {}
+
+        # Build temperature cache from all configured DS18B20 sensors
+        for cfg in self._configs:
+            if cfg.input_type != "ds18b20" or not cfg.show_temp:
+                continue
+            sensor_name = cfg.sensor_name
+            if not sensor_name or sensor_name in temp_cache:
+                continue
+
+            sensor_id = cfg.sensor_id
+            if not sensor_id and w1_base.exists():
+                for dev_dir in w1_base.iterdir():
+                    if dev_dir.name.startswith("28-"):
+                        sensor_id = dev_dir.name
+                        break
+
+            if not sensor_id:
+                temp_cache[sensor_name] = None
+                continue
+
+            try:
+                temp_cache[sensor_name] = self._read_sensor_temp(sensor_id, w1_base)
+            except Exception as e:
+                logger.warning(f"Temp read error for {sensor_name}: {e}")
+                temp_cache[sensor_name] = None
+
+        # Evaluate each temp-trigger pin
+        for handle in self._handles.values():
+            cfg = handle.config
+            if cfg.trigger != TRIGGER_TEMP:
+                continue
+
+            source_name = cfg.temp_source
+            if not source_name:
+                continue
+
+            temp = temp_cache.get(source_name)
+            if temp is None:
+                logger.debug(
+                    f"Temp pin {cfg.bcm_pin}: source '{source_name}' "
+                    f"not readable, holding state"
+                )
+                continue
+
+            if temp >= cfg.temp_on:
+                if not handle.is_active:
+                    logger.info(
+                        f"Temp pin {cfg.bcm_pin} -> ON "
+                        f"({source_name}={temp}C >= {cfg.temp_on}C)"
+                    )
+                    handle.on()
+            elif temp <= cfg.temp_off:
+                if handle.is_active:
+                    logger.info(
+                        f"Temp pin {cfg.bcm_pin} -> OFF "
+                        f"({source_name}={temp}C <= {cfg.temp_off}C)"
+                    )
+                    handle.off()
+            # Between thresholds: hysteresis, hold current state
 
     def cleanup(self):
         """Release all pins. Fail-safe: everything OFF first, then release."""
+        self._stop_temp_monitor()
         self.all_off()
         for handle in self._handles.values():
             handle.close()
@@ -290,7 +405,7 @@ class GPIOManager:
             else:
                 handle.off()
 
-    def on_button_toggle(self, button_id: str, active: bool):
+    async def on_button_toggle(self, button_id: str, active: bool):
         """Handle header button press (button1 or button2)."""
         if button_id not in ("button1", "button2"):
             logger.warning(f"Unknown button_id: {button_id}")

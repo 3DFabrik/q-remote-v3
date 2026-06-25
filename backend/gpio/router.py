@@ -232,7 +232,7 @@ async def toggle_button(button_id: str, request: Request, _=Depends(login_requir
     if not isinstance(active, bool):
         return JSONResponse({"error": "'active' must be boolean"}, status_code=400)
 
-    manager.on_button_toggle(button_id, active)
+    await manager.on_button_toggle(button_id, active)
 
     from backend.auth import log_activity, get_current_user
     log_activity(get_current_user(request), "GPIO_BUTTON", f"{button_id}={'ON' if active else 'OFF'}")
