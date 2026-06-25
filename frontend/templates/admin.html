@@ -330,13 +330,28 @@
     var RESERVED = ALL_RESERVED; // backward compat for save validation
     var BANDS = ['2m','70cm','23cm','13cm','9cm','6m','10m','15m','20m','40m','80m','160m'];
     var rows = [];
+    var _sensorStatus = {};
 
     try {
         var resp = await fetch('/api/gpio/config');
         var data = await resp.json();
         rows = data.pins || [];
     } catch(e) { console.warn('GPIO config load failed:', e); }
+    await loadSensorStatus();
     renderAll();
+
+    async function loadSensorStatus() {
+        _sensorStatus = {};
+        try {
+            var resp = await fetch('/api/gpio/sensor-status');
+            if (!resp.ok) return;
+            var data = await resp.json();
+            (data.sensors || []).forEach(function(s) {
+                _sensorStatus[s.bcm_pin] = s;
+            });
+        } catch(e) { console.warn('Sensor status load failed:', e); }
+    }
+    window._reloadSensorStatus = loadSensorStatus;
 
     window.gpioAddRow = function(direction) {
         direction = direction || 'output';
@@ -473,8 +488,13 @@
 
         var paramHtml = '<span class="hint">\u2014</span>';
         if (isInput && row.input_type === 'ds18b20') {
-            paramHtml = '<div style="display:flex;align-items:center;gap:4px"><input type="text" style="flex:1;min-width:0" value="' + (row.sensor_name || '') + '" placeholder="Sensor-Name" onchange="gpioUpdateParam(' + idx + ',\'sensor_name\',this.value)">' +
+            paramHtml = '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap"><input type="text" style="flex:1;min-width:0" value="' + (row.sensor_name || '') + '" placeholder="Sensor-Name" onchange="gpioUpdateParam(' + idx + ',\'sensor_name\',this.value)">' +
                 '<label style="display:flex;align-items:center;gap:2px;font-size:0.6rem;color:#706858;white-space:nowrap;"><input type="checkbox"' + (row.show_temp ? ' checked' : '') + ' onchange="gpioUpdateParam(' + idx + ',\'show_temp\',this.checked)"> anzeigen</label></div>';
+            // Show warning if sensor is configured but not physically detected
+            var ss = _sensorStatus[row.bcm_pin];
+            if (ss && !ss.detected) {
+                paramHtml += '<div style="color:var(--red);font-size:0.6rem;margin-top:2px;width:100%;">\u26a0\ufe0f Kein Sensor erkannt' + (ss.error ? ' (' + ss.error + ')' : '') + '</div>';
+            }
         } else if (!isInput) {
             if (row.trigger === 'button1' || row.trigger === 'button2') {
                 paramHtml = '<input type="text" value="' + (row.button_label || '') + '" placeholder="Label" onchange="gpioUpdateParam(' + idx + ',\'button_label\',this.value)">';

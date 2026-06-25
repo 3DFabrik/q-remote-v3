@@ -261,6 +261,52 @@ async def get_temperatures(request: Request, _=Depends(login_required)):
     return {"sensors": sensors}
 
 
+# ─── Sensor Detection Status ─────────────────────────────────────
+
+@router.get("/sensor-status")
+async def get_sensor_status(request: Request, _=Depends(admin_required)):
+    """Return physical detection status for all configured DS18B20 sensors.
+
+    Used by admin page to show warnings when a sensor is configured
+    but not physically detected.
+    """
+    from pathlib import Path as _Path
+    w1_base = _Path("/sys/bus/w1/devices")
+    statuses = []
+
+    for cfg in manager._configs:
+        if cfg.input_type != "ds18b20":
+            continue
+
+        status = {
+            "bcm_pin": cfg.bcm_pin,
+            "sensor_name": cfg.sensor_name,
+            "sensor_id": cfg.sensor_id,
+            "detected": False,
+            "error": "",
+        }
+
+        sensor_id = cfg.sensor_id
+        if not sensor_id and w1_base.exists():
+            for dev_dir in w1_base.iterdir():
+                if dev_dir.name.startswith("28-"):
+                    sensor_id = dev_dir.name
+                    break
+
+        if not sensor_id:
+            status["error"] = "Kein Sensor erkannt (kein 28-* Device in /sys/bus/w1/devices)"
+        else:
+            w1_file = w1_base / sensor_id / "w1_slave"
+            if w1_file.exists():
+                status["detected"] = True
+            else:
+                status["error"] = f"Sensor-ID {sensor_id} nicht verbunden"
+
+        statuses.append(status)
+
+    return {"sensors": statuses}
+
+
 # ─── Initialization ──────────────────────────────────────────────
 
 @router.post("/reinit")

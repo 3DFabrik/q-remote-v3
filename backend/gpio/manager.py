@@ -388,12 +388,16 @@ class GPIOManager:
         """Read all configured DS18B20 sensors and return their current values.
 
         Returns a list of dicts: [{name, id, temp, pin, error?}, ...]
+        Always returns an entry for every sensor with show_temp=True,
+        even if the temperature cannot be read (temp=null, error=reason).
         Reads from /sys/bus/w1/devices/<sensor_id>/w1_slave (standard 1-Wire).
         """
         results = []
         w1_base = Path("/sys/bus/w1/devices")
 
         for cfg in self._configs:
+            # Return entry for ALL ds18b20 sensors with show_temp=True,
+            # regardless of whether physical sensor is detected.
             if cfg.input_type != "ds18b20" or not cfg.show_temp:
                 continue
 
@@ -404,25 +408,31 @@ class GPIOManager:
                 "temp": None,
             }
 
-            # Determine sensor_id: explicit config or auto-detect
+            # Check if sensor_id is configured
             sensor_id = cfg.sensor_id
 
-            if not sensor_id and w1_base.exists():
+            # Auto-detect if not explicitly set
+            if not sensor_id:
+                if not w1_base.exists():
+                    entry["error"] = "1-Wire nicht aktiviert (/sys/bus/w1 nicht vorhanden)"
+                    results.append(entry)
+                    continue
+                # Try auto-detect
                 for dev_dir in w1_base.iterdir():
                     if dev_dir.name.startswith("28-"):
                         sensor_id = dev_dir.name
                         break
+                if not sensor_id:
+                    entry["error"] = "Kein DS18B20 Sensor gefunden (Auto-Erkennung)"
+                    results.append(entry)
+                    continue
 
-            if not sensor_id:
-                entry["error"] = "No 1-Wire device found (1-Wire disabled?)"
-                results.append(entry)
-                continue
-
+            # Now we have a sensor_id — check if the device file exists
             entry["id"] = sensor_id
             w1_file = w1_base / sensor_id / "w1_slave"
 
             if not w1_file.exists():
-                entry["error"] = "Sensor file not found"
+                entry["error"] = f"Sensor nicht verbunden (ID: {sensor_id})"
                 results.append(entry)
                 continue
 
@@ -431,7 +441,7 @@ class GPIOManager:
                 lines = raw.split("\n")
 
                 if lines and "YES" not in lines[0]:
-                    entry["error"] = "CRC check failed"
+                    entry["error"] = "CRC-Pruefung fehlgeschlagen"
                     results.append(entry)
                     continue
 
@@ -441,10 +451,10 @@ class GPIOManager:
                     temp_c = round(temp_raw / 1000.0, 1)
                     entry["temp"] = temp_c
                 else:
-                    entry["error"] = "Could not parse temperature"
+                    entry["error"] = "Temperatur konnte nicht gelesen werden"
 
             except Exception as e:
-                entry["error"] = f"Read error: {e}"
+                entry["error"] = f"Lesefehler: {e}"
 
             results.append(entry)
 

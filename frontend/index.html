@@ -56,7 +56,7 @@
                     <canvas id="smeter-canvas" width="260" height="80"></canvas>
                 </div>
                 <div id="ptt-column">
-                    <button id="ptt-btn" class="ptt-button">TRANSMIT</button>
+                    <button id="ptt-btn" class="ptt-button">PTT</button>
                     <div class="engraved">Push to Talk</div>
                     <div id="ptt-net-status" class="ptt-net-status"></div>
                 </div>
@@ -66,13 +66,15 @@
         <!-- GPIO Button Bar -->
         <div id="gpio-bar" class="instrument-panel gpio-bar" style="display:none;">
             <div class="panel-label">Auxiliary Controls</div>
-            <button id="gpio-btn-1" class="gpio-toggle-btn" style="display:none;" onclick="toggleGpioBtn('button1')">
+            <div class="gpio-bar-inner">
+                <button id="gpio-btn-1" class="gpio-toggle-btn" style="display:none;" onclick="toggleGpioBtn('button1')">
                 <span class="gpio-btn-label"></span>
             </button>
             <button id="gpio-btn-2" class="gpio-toggle-btn" style="display:none;" onclick="toggleGpioBtn('button2')">
                 <span class="gpio-btn-label"></span>
             </button>
             <div id="gpio-temp-display" class="gpio-temp-display"></div>
+            </div>
         </div>
 
         <!-- Controls Panel -->
@@ -143,7 +145,7 @@
             }
 
             const bar = document.getElementById('gpio-bar');
-            bar.style.display = visible > 0 ? 'flex' : 'none';
+            bar.style.display = visible > 0 ? 'block' : 'none';
         } catch(e) {
             console.warn('GPIO buttons load failed:', e);
         }
@@ -196,8 +198,8 @@
                 if (s.temp !== null && s.temp !== undefined) {
                     return '<span class="gpio-temp-item">' + s.name + ': ' + s.temp.toFixed(1) + '\u00B0C</span>';
                 } else {
-                    var err = s.error || 'N/A';
-                    return '<span class="gpio-temp-item gpio-temp-error">' + s.name + ': ' + err + '</span>';
+                    // Show clean "—.-°C" format when temperature not available
+                    return '<span class="gpio-temp-item gpio-temp-error">' + s.name + ': \u2014.\u2010\u00B0C</span>';
                 }
             }).join('');
             display.innerHTML = html;
@@ -226,7 +228,7 @@
                 btn.style.display = 'none';
             }
         }
-        document.getElementById('gpio-bar').style.display = visible > 0 ? 'flex' : 'none';
+        document.getElementById('gpio-bar').style.display = visible > 0 ? 'block' : 'none';
     }
     </script>
 
