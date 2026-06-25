@@ -226,21 +226,14 @@ header {
     -webkit-user-select: none;
     touch-action: manipulation;
     text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-    box-shadow:
-        0 3px 0 #222,
-        0 4px 4px rgba(0,0,0,0.4),
-        inset 0 1px 0 rgba(255,255,255,0.15);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.15);
     transition: all 0.05s;
     width: 56px;
     text-decoration: none;
 }
 .hdr-btn:active {
-    transform: translateY(2px);
-    box-shadow:
-        0 1px 0 #222,
-        0 1px 2px rgba(0,0,0,0.4),
-        inset 0 2px 4px rgba(0,0,0,0.4);
     background: linear-gradient(180deg, #555 0%, #383838 40%, #2a2a2a 100%);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
 }
 .hdr-btn:hover { border-color: var(--accent); }
 .hdr-btn.active {
@@ -400,16 +393,13 @@ header {
     background: linear-gradient(180deg, #666 0%, #444 40%, #333 100%);
     border: 1px solid #222;
     border-radius: 4px;
-    padding: 8px;
+    padding: 4px 8px;
     cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
     touch-action: manipulation;
     text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-    box-shadow:
-        0 3px 0 #222,
-        0 4px 4px rgba(0,0,0,0.4),
-        inset 0 1px 0 rgba(255,255,255,0.15);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.15);
     transition: all 0.05s;
     position: relative;
     min-width: 44px;
@@ -420,17 +410,20 @@ header {
 }
 
 .radio-btn .btn-label {
-    font-size: 0.95rem;
+    font-size: 0.8rem;
     line-height: 1;
     text-align: left;
 }
 
 .radio-btn .btn-sub {
-    font-size: 0.95rem;
+    font-size: 0.6rem;
     color: var(--amber);
     opacity: 0.8;
     letter-spacing: 0.5px;
     text-align: right;
+    display: block;
+    line-height: 1;
+    margin-top: 1px;
 }
 
 /* Buttons without sub-label: center the main label */
@@ -440,12 +433,8 @@ header {
 }
 
 .radio-btn:active {
-    transform: translateY(2px);
-    box-shadow:
-        0 1px 0 #222,
-        0 1px 2px rgba(0,0,0,0.4),
-        inset 0 2px 4px rgba(0,0,0,0.4);
     background: linear-gradient(180deg, #555 0%, #383838 40%, #2a2a2a 100%);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
 }
 
 /* Function keys removed – using UV-K5 layout */
@@ -473,12 +462,15 @@ header {
 /* PTT now in #ptt-column */
 
 .ptt-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
     font-family: var(--font-mono);
-    width: 100%;
-    height: 100%;
-    min-height: 80px;
-    padding: 12px 10px;
-    font-size: 0.85rem;
+    width: 80px;
+    height: 80px;
+    padding: 0;
+    font-size: 0.8rem;
     font-weight: bold;
     letter-spacing: 2px;
     text-transform: uppercase;
@@ -488,45 +480,37 @@ header {
     /* Red button */
     background: linear-gradient(180deg, #cc3333 0%, #aa1111 40%, #880808 100%);
     border: 2px solid #660000;
-    border-radius: 8px;
+    border-radius: 50%;
     cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
     touch-action: none;
     
-    box-shadow:
-        0 5px 0 #550000,
-        0 6px 8px rgba(0,0,0,0.5),
-        inset 0 1px 0 rgba(255,255,255,0.2),
-        inset 0 -2px 4px rgba(0,0,0,0.3);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -2px 4px rgba(0,0,0,0.3);
     transition: all 0.08s;
     position: relative;
 }
 
 .ptt-button:active,
 .ptt-button.active {
-    transform: translateY(3px);
     background: linear-gradient(180deg, #ee4444 0%, #cc2222 40%, #aa1111 100%);
     box-shadow:
-        0 2px 0 #550000,
-        0 2px 4px rgba(0,0,0,0.5),
-        inset 0 2px 6px rgba(0,0,0,0.4);
-    color: #ffcccc;
-    /* TX active glow */
-    box-shadow:
-        0 2px 0 #550000,
         0 0 20px rgba(255,68,34,0.5),
         0 0 40px rgba(255,68,34,0.2),
         inset 0 2px 6px rgba(0,0,0,0.4);
+    color: #ffcccc;
 }
 
 /* TX indicator */
 .ptt-button::after {
     content: '●';
     font-size: 0.6rem;
-    margin-left: 8px;
     opacity: 0;
     transition: opacity 0.1s;
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
 }
 
 .ptt-button.active::after {
@@ -585,11 +569,15 @@ header {
 
 /* GPIO Button Bar */
 .gpio-bar {
-    display: flex;
-    gap: 6px;
+    display: block;
     padding: 16px;
     margin-bottom: 12px;
-    min-height: 0;
+}
+.gpio-bar-inner {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    padding: 0 4px;
 }
 .gpio-toggle-btn {
     display: flex;
@@ -602,15 +590,15 @@ header {
     background: linear-gradient(180deg, #666 0%, #444 40%, #333 100%);
     border: 1px solid #222;
     border-radius: 4px;
-    padding: 3px 16px;
+    padding: 3px 8px;
     cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
     touch-action: manipulation;
     text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-    box-shadow: 0 2px 0 #222, 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.15);
     transition: all 0.05s;
-    min-width: 80px;
+    min-width: 0;
 }
 .gpio-toggle-btn:active {
     transform: translateY(1px);
@@ -626,19 +614,19 @@ header {
 
 .gpio-temp-display {
     flex-direction: column;
-    gap: 2px;
-    min-width: 80px;
+    gap: 4px;
+    text-align: center;
+    justify-self: center;
+    align-self: center;
 }
 .gpio-temp-item {
     font-family: var(--font-mono);
-    font-size: 0.6rem;
-    letter-spacing: 0.5px;
-    color: var(--phosphor-dim);
-    text-shadow: 0 0 4px rgba(0,170,42,0.4);
+    font-size: 0.65rem;
+    letter-spacing: 1px;
+    color: #1a1a1a;
     white-space: nowrap;
     line-height: 1.3;
 }
 .gpio-temp-error {
-    color: #cc6600;
-    text-shadow: none;
+    color: #1a1a1a;
 }
