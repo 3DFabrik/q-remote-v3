@@ -85,6 +85,13 @@ class PinConfig:
     # Column 5: Fail-Safe & Session safety
     session_bound: bool = False          # Pin OFF when no user session active
 
+    # DS18B20 / Input support
+    direction: str = "output"            # "output" | "input"
+    input_type: str = ""                 # "ds18b20" | ""
+    sensor_name: str = ""                # Name for DS18B20 sensor (e.g. "PA-Temp")
+    sensor_id: str = ""                  # Auto-detected 1-Wire ID (e.g. "28-00000xxxx")
+    temp_source: str = ""                # For temp trigger: which sensor_name to watch
+
     def to_dict(self) -> dict:
         return asdict(self)
 

@@ -171,7 +171,26 @@
             font-style: italic;
         }
         /* GPIO Matrix */
+        .gpio-table-wrap { overflow-x: auto; overflow-y: auto; -webkit-overflow-scrolling: touch; border: 2px solid var(--panel-border); border-radius: 4px; max-height: 400px; }
+        .gpio-table-wrap::-webkit-scrollbar { width: 8px; height: 8px; }
+        .gpio-table-wrap::-webkit-scrollbar-track { background: var(--panel-inner); }
+        .gpio-table-wrap::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+        .gpio-table-wrap::-webkit-scrollbar-thumb:hover { background: #777; }
+        #gpio-table { width: 100%; border-collapse: collapse; }
+        #gpio-table th, #gpio-table td { padding: 6px 8px; text-align: left; border-bottom: 1px solid rgba(0,0,0,0.1); font-size: 0.8rem; color: #504840; white-space: nowrap; }
+        #gpio-table th { color: #706858; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 2px; position: sticky; top: 0; background: var(--panel); z-index: 1; }
+        #gpio-table .col-pin { width: 80px; }
+        #gpio-table .col-dir { width: 130px; }
+        #gpio-table .col-trig { width: 155px; }
+        #gpio-table .col-param { min-width: 170px; }
+        #gpio-table .col-session { width: 40px; text-align: center; }
+        #gpio-table .col-del { width: 35px; text-align: center; }
+        #gpio-table select, #gpio-table input[type="text"], #gpio-table input[type="number"] { background: var(--bg); border: 1px solid var(--panel-border); color: var(--phosphor); padding: 3px 4px; border-radius: 3px; font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; }
+        #gpio-table input[type="number"] { width: 45px; text-align: center; }
+        #gpio-table input[type="text"] { width: 80px; }
+        .gpio-param-wrap { display: inline-flex; gap: 3px; align-items: center; flex-wrap: wrap; }
         .gpio-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+        .gpio-actions .hint { margin-left: auto; }
         .gpio-actions .hint { margin-left: auto; }
         #gpio-table select, #gpio-table input[type="text"], #gpio-table input[type="number"] {
             background: var(--bg);
@@ -269,7 +288,7 @@
             <details class="section">
                 <summary><h2>🔧 GPIO Matrix</h2></summary>
                 <p class="hint" style="margin:6px 0 10px;">Configure Raspberry Pi GPIO pins for external hardware (PA relay, sequencer, etc.). Saved to config.local.yaml.</p>
-                <table id="gpio-table">
+                <div class="gpio-table-wrap"><table id="gpio-table">
                     <thead>
                         <tr>
                             <th>GPIO Pin</th>
@@ -283,7 +302,9 @@
                     <tbody id="gpio-tbody"></tbody>
                 </table>
                 <div class="gpio-actions">
-                    <button class="btn btn-add" onclick="gpioAddRow()">+ ADD PIN</button>
+                    </table></div>
+                <div class="gpio-actions">
+                    <button class="btn btn-add" onclick="gpioAddRow()">+ ADD GPIO</button>
                     <button class="btn btn-save" onclick="gpioSave()">SAVE CONFIG</button>
                     <span id="gpio-status" class="hint"></span>
                 </div>
@@ -294,171 +315,149 @@
 
 <script>
 (async function() {
-    const TRIGGERS = [
+    var TRIGGERS = [
         { value: 'ptt', label: 'Bei TX (PTT)' },
         { value: 'button1', label: 'Kopfzeilen-Button 1' },
         { value: 'button2', label: 'Kopfzeilen-Button 2' },
         { value: 'band', label: 'Band-Decoder (CAT)' },
         { value: 'temp', label: 'Temperatur-Schwellenwert' },
     ];
-    const ALL_PINS = [4,5,6,7,8,9,10,11,12,13,16,17,18,19,20,21,22,23,24,25,26,27];
-    const RESERVED = new Set([2, 3]);
-    const BANDS = ['2m','70cm','23cm','13cm','9cm','6m','10m','15m','20m','40m','80m','160m'];
-
-    let rows = [];
+    var ALL_PINS = [4,5,6,7,8,9,10,11,12,13,16,17,18,19,20,21,22,23,24,25,26,27];
+    var RESERVED = new Set([2, 3]);
+    var BANDS = ['2m','70cm','23cm','13cm','9cm','6m','10m','15m','20m','40m','80m','160m'];
+    var rows = [];
 
     try {
-        const resp = await fetch('/api/gpio/config');
-        const data = await resp.json();
+        var resp = await fetch('/api/gpio/config');
+        var data = await resp.json();
         rows = data.pins || [];
-    } catch(e) {
-        console.warn('GPIO config load failed:', e);
-    }
+    } catch(e) { console.warn('GPIO config load failed:', e); }
     renderAll();
 
-    window.gpioAddRow = function(cfg) {
-        const usedPins = new Set(rows.map(r => r.bcm_pin));
-        const nextPin = ALL_PINS.find(p => !usedPins.has(p) && !RESERVED.has(p)) || 4;
+    window.gpioAddRow = function(direction) {
+        direction = direction || 'output';
+        var usedPins = new Set(rows.map(function(r){ return r.bcm_pin; }));
+        var nextPin = ALL_PINS.find(function(p){ return !usedPins.has(p) && !RESERVED.has(p); }) || 4;
         rows.push({
-            bcm_pin: (cfg && cfg.bcm_pin) || nextPin,
-            logic_level: (cfg && cfg.logic_level) || 'active_low',
-            output_mode: 'push_pull',
-            trigger: (cfg && cfg.trigger) || '',
-            button_label: (cfg && cfg.button_label) || '',
-            sequencer_delay_ms: (cfg && cfg.sequencer_delay_ms) || 0,
-            ptt_combo_button: (cfg && cfg.ptt_combo_button) || '',
-            band: (cfg && cfg.band) || '',
-            temp_on: (cfg && cfg.temp_on) || 0,
-            temp_off: (cfg && cfg.temp_off) || 0,
-            session_bound: (cfg && cfg.session_bound) || false,
+            bcm_pin: nextPin, direction: direction, input_type: direction === 'input' ? 'ds18b20' : '',
+            sensor_name: '', sensor_id: '', logic_level: 'active_low', output_mode: 'push_pull',
+            trigger: '', button_label: '', sequencer_delay_ms: 0, ptt_combo_button: '',
+            band: '', temp_on: 0, temp_off: 0, temp_source: '', session_bound: false
         });
         renderAll();
     };
 
-    window.gpioRemoveRow = function(idx) {
-        rows.splice(idx, 1);
-        renderAll();
-    };
+    window.gpioRemoveRow = function(idx) { rows.splice(idx, 1); renderAll(); };
 
     window.gpioSave = async function() {
-        for (let i = 0; i < rows.length; i++) {
-            for (let j = i + 1; j < rows.length; j++) {
-                if (rows[i].bcm_pin === rows[j].bcm_pin) {
-                    gpioStatus('ERROR: Doppel-Pin GPIO ' + rows[i].bcm_pin);
-                    return;
-                }
+        for (var i = 0; i < rows.length; i++) {
+            if (RESERVED.has(rows[i].bcm_pin)) { gpioStatus('ERROR: Pin ' + rows[i].bcm_pin + ' reserviert'); return; }
+        }
+        var outputPins = {};
+        for (var i = 0; i < rows.length; i++) {
+            if (rows[i].direction === 'output') {
+                if (outputPins[rows[i].bcm_pin]) { gpioStatus('ERROR: Doppel-Pin ' + rows[i].bcm_pin); return; }
+                outputPins[rows[i].bcm_pin] = true;
             }
-            if (RESERVED.has(rows[i].bcm_pin)) {
-                gpioStatus('ERROR: Pin ' + rows[i].bcm_pin + ' ist system-reserviert');
-                return;
+        }
+        for (var i = 0; i < rows.length; i++) {
+            if (rows[i].trigger === 'temp' && rows[i].temp_source) {
+                var ok = rows.some(function(r,j){ return j !== i && r.direction === 'input' && r.input_type === 'ds18b20' && r.sensor_name === rows[i].temp_source; });
+                if (!ok) { gpioStatus('ERROR: Temp-Quelle nicht gefunden'); return; }
             }
         }
         try {
-            const resp = await fetch('/api/gpio/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pins: rows }),
-            });
-            const result = await resp.json();
-            if (resp.ok) {
-                gpioStatus('\u2713 Gespeichert (' + rows.length + ' Pin' + (rows.length !== 1 ? 's' : '') + ')');
-            } else {
-                gpioStatus('ERROR: ' + (result.error || 'Unbekannt'));
-            }
-        } catch(e) {
-            gpioStatus('ERROR: Netzwerkfehler');
-        }
+            var resp = await fetch('/api/gpio/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pins: rows }) });
+            var result = await resp.json();
+            if (resp.ok) { gpioStatus('\u2713 Gespeichert (' + rows.length + ' Pin' + (rows.length !== 1 ? 's' : '') + ')'); }
+            else { gpioStatus('ERROR: ' + (result.error || 'Unbekannt')); }
+        } catch(e) { gpioStatus('ERROR: Netzwerkfehler'); }
     };
 
-    window.gpioUpdateTrigger = function(idx, value) {
-        rows[idx].trigger = value;
-        renderAll();
+    window.gpioUpdateTrigger = function(idx, val) { rows[idx].trigger = val; renderAll(); };
+    window.gpioUpdateParam = function(idx, field, val) {
+        if (field === 'bcm_pin' || field === 'sequencer_delay_ms') val = parseInt(val) || 0;
+        else if (field === 'temp_on' || field === 'temp_off') val = parseFloat(val) || 0;
+        rows[idx][field] = val;
     };
-
-    window.gpioUpdateParam = function(idx, field, value) {
-        if (field === 'bcm_pin') value = parseInt(value) || 0;
-        else if (field === 'sequencer_delay_ms') value = parseInt(value) || 0;
-        else if (field === 'temp_on' || field === 'temp_off') value = parseFloat(value) || 0;
-        rows[idx][field] = value;
-    };
-
-    window.gpioToggleSession = function(idx) {
-        rows[idx].session_bound = !rows[idx].session_bound;
+    window.gpioToggleSession = function(idx) { rows[idx].session_bound = !rows[idx].session_bound; renderAll(); };
+    window.gpioChangeDirection = function(idx, dir) {
+        rows[idx].direction = dir;
+        if (dir === 'input') { rows[idx].trigger = ''; rows[idx].input_type = rows[idx].input_type || 'ds18b20'; rows[idx].logic_level = ''; }
+        else { rows[idx].input_type = ''; rows[idx].sensor_name = ''; rows[idx].sensor_id = ''; }
         renderAll();
     };
 
     function gpioStatus(msg) {
-        const el = document.getElementById('gpio-status');
+        var el = document.getElementById('gpio-status');
         el.textContent = msg;
         el.style.color = msg.startsWith('ERROR') ? 'var(--red)' : 'var(--green)';
-        clearTimeout(el._timer);
-        el._timer = setTimeout(() => { el.textContent = ''; }, 5000);
+        clearTimeout(el._t);
+        el._t = setTimeout(function(){ el.textContent = ''; }, 5000);
     }
 
     function renderAll() {
-        document.getElementById('gpio-tbody').innerHTML = rows.map((row, idx) => renderRow(row, idx)).join('');
+        document.getElementById('gpio-tbody').innerHTML = rows.map(function(row, idx){ return renderRow(row, idx); }).join('');
     }
 
-    function sel(cur, val) { return val === cur ? ' selected' : ''; }
-    function dis(cond) { return cond ? ' disabled' : ''; }
+    function s(cur, val) { return val === cur ? ' selected' : ''; }
+    function d(cond) { return cond ? ' disabled' : ''; }
 
     function renderRow(row, idx) {
-        const usedPins = new Set(rows.filter((_, i) => i !== idx).map(r => r.bcm_pin));
-        const pinOpts = ALL_PINS.map(p => {
-            const label = RESERVED.has(p) ? `GPIO ${p} (I2C)` :
-                          usedPins.has(p) ? `GPIO ${p} \u25b8` : `GPIO ${p}`;
-            const isDis = (RESERVED.has(p) || usedPins.has(p)) && p !== row.bcm_pin;
-            return `<option value="${p}"${sel(p, row.bcm_pin)}${dis(isDis)}>${label}</option>`;
+        var isInput = row.direction === 'input';
+        var usedOut = new Set(rows.filter(function(_, i){ return i !== idx && rows[i].direction === 'output'; }).map(function(r){ return r.bcm_pin; }));
+        var pinOpts = ALL_PINS.map(function(p) {
+            var label = RESERVED.has(p) ? 'GPIO ' + p + ' (I2C)' : usedOut.has(p) ? 'GPIO ' + p + ' \u25b8' : 'GPIO ' + p;
+            var isDis = (RESERVED.has(p) || (usedOut.has(p) && !isInput)) && p !== row.bcm_pin;
+            return '<option value="' + p + '"' + s(p, row.bcm_pin) + d(isDis) + '>' + label + '</option>';
         }).join('');
 
-        const logicOpts = [['active_low','Active-Low'],['active_high','Active-High']]
-            .map(([v, l]) => `<option value="${v}"${sel(v, row.logic_level)}>${l}</option>`).join('');
-
-        const triggerOpts = `<option value="">\u2014 kein \u2014</option>` +
-            TRIGGERS.map(t => `<option value="${t.value}"${sel(t.value, row.trigger)}>${t.label}</option>`).join('');
-
-        let paramHtml = '<span class="hint">\u2014</span>';
-        switch (row.trigger) {
-            case 'button1':
-            case 'button2':
-                paramHtml = `<input type="text" value="${row.button_label || ''}" placeholder="Button-Label"
-                    onchange="gpioUpdateParam(${idx},'button_label',this.value)">`;
-                break;
-            case 'ptt':
-                paramHtml = `<div class="gpio-param-wrap">
-                    <input type="number" value="${row.sequencer_delay_ms}" min="0" max="5000" placeholder="ms"
-                        onchange="gpioUpdateParam(${idx},'sequencer_delay_ms',this.value)"> ms
-                    <select onchange="gpioUpdateParam(${idx},'ptt_combo_button',this.value)">
-                        <option value="">\u2014 solo \u2014</option>
-                        <option value="button1"${sel('button1', row.ptt_combo_button)}>+ Btn 1</option>
-                        <option value="button2"${sel('button2', row.ptt_combo_button)}>+ Btn 2</option>
-                    </select></div>`;
-                break;
-            case 'band':
-                paramHtml = `<select onchange="gpioUpdateParam(${idx},'band',this.value)">
-                    <option value="">\u2014 w\u00e4hlen \u2014</option>
-                    ${BANDS.map(b => `<option value="${b}"${sel(b, row.band)}>${b}</option>`).join('')}
-                    </select>`;
-                break;
-            case 'temp':
-                paramHtml = `<div class="gpio-param-wrap">
-                    <input type="number" value="${row.temp_on || ''}" placeholder="ON \u00b0C" step="0.5"
-                        onchange="gpioUpdateParam(${idx},'temp_on',this.value)"> /
-                    <input type="number" value="${row.temp_off || ''}" placeholder="OFF \u00b0C" step="0.5"
-                        onchange="gpioUpdateParam(${idx},'temp_off',this.value)"> \u00b0C</div>`;
-                break;
+        var dirHtml;
+        if (isInput) {
+            dirHtml = '<select onchange="gpioChangeDirection(' + idx + ',\'output\')"><option value="input" selected>IN</option><option value="output">OUT</option></select>' +
+                '<select onchange="gpioUpdateParam(' + idx + ',\'input_type\',this.value)"><option value="ds18b20"' + s('ds18b20', row.input_type) + '>DS18B20</option></select>';
+        } else {
+            dirHtml = '<select onchange="gpioChangeDirection(' + idx + ',\'input\')"><option value="output" selected>OUT</option><option value="input">IN</option></select>' +
+                '<select onchange="gpioUpdateParam(' + idx + ',\'logic_level\',this.value)"><option value="active_low"' + s('active_low', row.logic_level) + '>Low</option><option value="active_high"' + s('active_high', row.logic_level) + '>High</option></select>';
         }
 
-        const sessionChk = row.session_bound ? ' checked' : '';
+        var trigHtml;
+        if (isInput) {
+            trigHtml = '<span class="hint">' + (row.input_type || '').toUpperCase() + '</span>';
+        } else {
+            trigHtml = '<select onchange="gpioUpdateTrigger(' + idx + ',this.value)"><option value="">\u2014</option>' +
+                TRIGGERS.map(function(t){ return '<option value="' + t.value + '"' + s(t.value, row.trigger) + '>' + t.label + '</option>'; }).join('') + '</select>';
+        }
 
-        return `<tr>
-            <td><select onchange="gpioUpdateParam(${idx},'bcm_pin',parseInt(this.value))">${pinOpts}</select></td>
-            <td><select onchange="gpioUpdateParam(${idx},'logic_level',this.value)">${logicOpts}</select></td>
-            <td><select onchange="gpioUpdateTrigger(${idx},this.value)">${triggerOpts}</select></td>
-            <td>${paramHtml}</td>
-            <td style="text-align:center"><input type="checkbox"${sessionChk} onchange="gpioToggleSession(${idx})"></td>
-            <td><button class="btn btn-delete gpio-btn-del" onclick="gpioRemoveRow(${idx})">\u2715</button></td>
-        </tr>`;
+        var paramHtml = '<span class="hint">\u2014</span>';
+        if (isInput && row.input_type === 'ds18b20') {
+            paramHtml = '<input type="text" value="' + (row.sensor_name || '') + '" placeholder="Sensor-Name" onchange="gpioUpdateParam(' + idx + ',\'sensor_name\',this.value)">';
+        } else if (!isInput) {
+            if (row.trigger === 'button1' || row.trigger === 'button2') {
+                paramHtml = '<input type="text" value="' + (row.button_label || '') + '" placeholder="Label" onchange="gpioUpdateParam(' + idx + ',\'button_label\',this.value)">';
+            } else if (row.trigger === 'ptt') {
+                paramHtml = '<div class="gpio-param-wrap"><input type="number" value="' + row.sequencer_delay_ms + '" min="0" max="5000" onchange="gpioUpdateParam(' + idx + ',\'sequencer_delay_ms\',this.value)"> ms' +
+                    '<select onchange="gpioUpdateParam(' + idx + ',\'ptt_combo_button\',this.value)"><option value="">solo</option><option value="button1"' + s('button1', row.ptt_combo_button) + '>Btn1</option><option value="button2"' + s('button2', row.ptt_combo_button) + '>Btn2</option></select></div>';
+            } else if (row.trigger === 'band') {
+                paramHtml = '<select onchange="gpioUpdateParam(' + idx + ',\'band\',this.value)"><option value="">\u2014</option>' +
+                    BANDS.map(function(b){ return '<option value="' + b + '"' + s(b, row.band) + '>' + b + '</option>'; }).join('') + '</select>';
+            } else if (row.trigger === 'temp') {
+                var srcs = rows.filter(function(r,j){ return j !== idx && r.direction === 'input' && r.input_type === 'ds18b20' && r.sensor_name; }).map(function(r){ return r.sensor_name; });
+                var srcOpts = srcs.length ? '<option value="">\u2014</option>' + srcs.map(function(n){ return '<option value="' + n + '"' + s(n, row.temp_source) + '>' + n + '</option>'; }).join('') : '<option value="">kein Sensor</option>';
+                paramHtml = '<div class="gpio-param-wrap"><select onchange="gpioUpdateParam(' + idx + ',\'temp_source\',this.value)">' + srcOpts + '</select>' +
+                    '<input type="number" value="' + (row.temp_on || '') + '" placeholder="ON" step="0.5" onchange="gpioUpdateParam(' + idx + ',\'temp_on\',this.value)">/' +
+                    '<input type="number" value="' + (row.temp_off || '') + '" placeholder="OFF" step="0.5" onchange="gpioUpdateParam(' + idx + ',\'temp_off\',this.value)"> \u00b0C</div>';
+            }
+        }
+
+        var sc = row.session_bound ? ' checked' : '';
+        var sd = isInput ? ' disabled' : '';
+        return '<tr><td class="col-pin"><select onchange="gpioUpdateParam(' + idx + ',\'bcm_pin\',parseInt(this.value))">' + pinOpts + '</select></td>' +
+            '<td class="col-dir">' + dirHtml + '</td>' +
+            '<td class="col-trig">' + trigHtml + '</td>' +
+            '<td class="col-param">' + paramHtml + '</td>' +
+            '<td class="col-session"><input type="checkbox"' + sc + sd + ' onchange="gpioToggleSession(' + idx + ')"></td>' +
+            '<td class="col-del"><button class="btn btn-delete" style="padding:2px 6px;font-size:0.6rem" onclick="gpioRemoveRow(' + idx + ')">\u2715</button></td></tr>';
     }
 })();
 </script>

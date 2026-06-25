@@ -142,6 +142,10 @@ async function init() {
         smeter.updateRX(continuousSraw);
     };
 
+    control.onGpioButtons = function(buttons) {
+        if (typeof updateGpioButtons === 'function') updateGpioButtons(buttons);
+    };
+    
     control.onPttStatus = (active, holder, error, user) => {
         const isMe = active && user === window.CURRENT_USER?.name;
         state.pttActive = active;

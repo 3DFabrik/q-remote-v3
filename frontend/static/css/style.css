@@ -582,3 +582,47 @@ header {
     margin-top: 4px;
     font-family: var(--font-mono, monospace);
 }
+
+/* GPIO Button Bar */
+.gpio-bar {
+    display: flex;
+    gap: 6px;
+    padding: 3px 16px;
+    background: linear-gradient(180deg, #b0a898 0%, #a09888 100%);
+    border: 2px solid var(--panel-border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    min-height: 0;
+}
+.gpio-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 1px;
+    color: var(--white);
+    background: linear-gradient(180deg, #666 0%, #444 40%, #333 100%);
+    border: 1px solid #222;
+    border-radius: 4px;
+    padding: 3px 16px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    box-shadow: 0 2px 0 #222, 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+    transition: all 0.05s;
+    min-width: 80px;
+}
+.gpio-toggle-btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 0 #222, inset 0 2px 4px rgba(0,0,0,0.4);
+}
+.gpio-toggle-btn.active {
+    background: linear-gradient(180deg, #2a6040 0%, #205030 100%);
+    border-color: var(--green);
+    box-shadow: 0 0 6px rgba(0,204,68,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+}
+.gpio-btn-label { pointer-events: none; }

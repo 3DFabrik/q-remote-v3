@@ -19,6 +19,7 @@ class ControlModule {
         this.onPttStatus = null;       // (active, holder, error, user) => {}
         this.onConnect = null;         // () => {}
         this.onDisconnect = null;      // () => {}
+        this.onGpioButtons = null;     // (buttons) => {}
     }
     
     connect() {
@@ -41,6 +42,10 @@ class ControlModule {
             console.log('[Control] Disconnected:', reason);
             this.connected = false;
             if (this.onDisconnect) this.onDisconnect();
+        });
+        
+        this.socket.on('gpio_buttons', (data) => {
+            if (this.onGpioButtons) this.onGpioButtons(data.buttons || {});
         });
         
         this.socket.on('display', (data) => {
