@@ -48,11 +48,7 @@
             <button id="gpio-btn-2" class="gpio-toggle-btn" style="display:none;" onclick="toggleGpioBtn('button2')">
                 <span class="gpio-btn-label"></span>
             </button>
-            <label class="gpio-temp-checkbox">
-                <input type="checkbox" id="gpio-temp-toggle" onchange="toggleTempDisplay()">
-                <span>🌡 Temperatur</span>
-            </label>
-            <div id="gpio-temp-display" class="gpio-temp-display" style="display:none;"></div>
+            <div id="gpio-temp-display" class="gpio-temp-display"></div>
         </div>
 
         <!-- CRT Display Panel -->
@@ -176,38 +172,25 @@
     // Load buttons after page init
     document.addEventListener('DOMContentLoaded', loadGpioButtons);
 
-    // --- Temperature Display ---
+    // --- Temperature Display (auto, polls every 5s) ---
     var _tempPollTimer = null;
-
-    async function toggleTempDisplay() {
-        var checkbox = document.getElementById('gpio-temp-toggle');
-        var display = document.getElementById('gpio-temp-display');
-        if (checkbox.checked) {
-            display.style.display = 'flex';
-            await loadTemperatures();
-            _tempPollTimer = setInterval(loadTemperatures, 5000);
-        } else {
-            display.style.display = 'none';
-            if (_tempPollTimer) {
-                clearInterval(_tempPollTimer);
-                _tempPollTimer = null;
-            }
-        }
-    }
 
     async function loadTemperatures() {
         try {
             var resp = await fetch('/api/gpio/temperatures');
-            if (!resp.ok) return;
+            if (!resp.ok) { return; }
             var data = await resp.json();
             var sensors = data.sensors || [];
             var display = document.getElementById('gpio-temp-display');
 
             if (sensors.length === 0) {
-                display.innerHTML = '<span class="gpio-temp-item gpio-temp-error">Keine Sensoren</span>';
+                display.style.display = 'none';
+                if (_tempPollTimer) { clearInterval(_tempPollTimer); _tempPollTimer = null; }
+                display.innerHTML = '';
                 return;
             }
 
+            display.style.display = 'flex';
             var html = sensors.map(function(s) {
                 if (s.temp !== null && s.temp !== undefined) {
                     return '<span class="gpio-temp-item">' + s.name + ': ' + s.temp.toFixed(1) + '\u00B0C</span>';
@@ -221,6 +204,12 @@
             console.warn('Temperature load failed:', e);
         }
     }
+
+    // Start polling on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadTemperatures();
+        _tempPollTimer = setInterval(loadTemperatures, 5000);
+    });
 
     function updateGpioButtons(buttons) {
         let visible = 0;

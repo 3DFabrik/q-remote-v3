@@ -109,6 +109,7 @@ class PinConfig:
     input_type: str = ""                 # "ds18b20" | ""
     sensor_name: str = ""                # Name for DS18B20 sensor (e.g. "PA-Temp")
     sensor_id: str = ""                  # Auto-detected 1-Wire ID (e.g. "28-00000xxxx")
+    show_temp: bool = False              # If True, temperature shown on main page
     temp_source: str = ""                # For temp trigger: which sensor_name to watch
 
     def to_dict(self) -> dict:
@@ -393,7 +394,7 @@ class GPIOManager:
         w1_base = Path("/sys/bus/w1/devices")
 
         for cfg in self._configs:
-            if cfg.input_type != "ds18b20":
+            if cfg.input_type != "ds18b20" or not cfg.show_temp:
                 continue
 
             entry = {
