@@ -40,17 +40,6 @@
             </div>
         </header>
 
-        <!-- GPIO Button Bar -->
-        <div id="gpio-bar" class="gpio-bar" style="display:none;">
-            <button id="gpio-btn-1" class="gpio-toggle-btn" style="display:none;" onclick="toggleGpioBtn('button1')">
-                <span class="gpio-btn-label"></span>
-            </button>
-            <button id="gpio-btn-2" class="gpio-toggle-btn" style="display:none;" onclick="toggleGpioBtn('button2')">
-                <span class="gpio-btn-label"></span>
-            </button>
-            <div id="gpio-temp-display" class="gpio-temp-display"></div>
-        </div>
-
         <!-- CRT Display Panel -->
         <div id="crt-bezel" class="instrument-panel">
             <div class="panel-label">Display — CRT Type 564</div>
@@ -72,6 +61,18 @@
                     <div id="ptt-net-status" class="ptt-net-status"></div>
                 </div>
             </div>
+        </div>
+
+        <!-- GPIO Button Bar -->
+        <div id="gpio-bar" class="instrument-panel gpio-bar" style="display:none;">
+            <div class="panel-label">Auxiliary Controls</div>
+            <button id="gpio-btn-1" class="gpio-toggle-btn" style="display:none;" onclick="toggleGpioBtn('button1')">
+                <span class="gpio-btn-label"></span>
+            </button>
+            <button id="gpio-btn-2" class="gpio-toggle-btn" style="display:none;" onclick="toggleGpioBtn('button2')">
+                <span class="gpio-btn-label"></span>
+            </button>
+            <div id="gpio-temp-display" class="gpio-temp-display"></div>
         </div>
 
         <!-- Controls Panel -->

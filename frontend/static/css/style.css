@@ -587,12 +587,8 @@ header {
 .gpio-bar {
     display: flex;
     gap: 6px;
-    padding: 3px 16px;
-    background: linear-gradient(180deg, #b0a898 0%, #a09888 100%);
-    border: 2px solid var(--panel-border);
-    border-radius: 6px;
-    margin-bottom: 8px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    padding: 16px;
+    margin-bottom: 12px;
     min-height: 0;
 }
 .gpio-toggle-btn {
@@ -627,26 +623,7 @@ header {
 }
 .gpio-btn-label { pointer-events: none; }
 
-.gpio-temp-checkbox {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    letter-spacing: 1px;
-    color: #333;
-    cursor: pointer;
-    user-select: none;
-    -webkit-user-select: none;
-    margin-left: auto;
-    white-space: nowrap;
-}
-.gpio-temp-checkbox input[type="checkbox"] {
-    width: 14px;
-    height: 14px;
-    cursor: pointer;
-    accent-color: #00cc44;
-}
+
 .gpio-temp-display {
     flex-direction: column;
     gap: 2px;
