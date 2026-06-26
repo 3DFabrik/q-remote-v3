@@ -77,29 +77,56 @@ Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmwa
 
 ## Quick Start
 
+### Automated install (Raspberry Pi)
+
 ```bash
-# Clone the repo
+git clone https://github.com/3DFabrik/q-remote-v3.git
+cd q-remote-v3
+chmod +x scripts/install.sh scripts/uninstall.sh
+sudo ./scripts/install.sh
+```
+
+This will:
+
+- Install system packages (`python3`, `venv`, `alsa-utils`, …)
+- Create a Python virtualenv and install all pip dependencies (including `gpiozero`)
+- Add the service user to `gpio`, `dialout`, and `audio` groups
+- Create `config.local.yaml` from the example (if missing)
+- Prompt for the first admin account (`users.json`) if none exists
+- Install and start a **systemd** service (`q-remote`)
+
+```bash
+# Service management
+sudo systemctl status q-remote
+sudo journalctl -u q-remote -f
+sudo ./scripts/uninstall.sh   # remove service only (keeps data)
+```
+
+Options: `--user pi`, `--port 8080`, `--deps-only` (no systemd), `--no-start`
+
+### Manual install
+
+```bash
 git clone https://github.com/3DFabrik/q-remote-v3.git
 cd q-remote-v3
 
-# Set up virtual environment
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Configure users
-cp config.yaml.example config.yaml
-# Edit config.yaml with your desired users
+cp config.local.yaml.example config.local.yaml
+# Edit config.local.yaml (radio device, audio, …)
+# Create users.json or log in once via admin after first manual user setup
 
-# Run
 uvicorn backend.main:asgi_app --host 0.0.0.0 --port 8080
 ```
 
-Open `https://your-pi:8080` in your browser. **HTTPS is required** for microphone access.
+Open `https://your-pi` in your browser (via reverse proxy). **HTTPS is required** for microphone access.
 
 ## Requirements
 
-- Python 3.11+
+- Raspberry Pi OS (or Linux) with Python 3.11+
+- `alsa-utils` (`arecord` / `aplay`) for radio audio
 - Modern browser (Chrome, Firefox, Edge, Safari)
 - Quansheng UV-K5 with QuanshengDock firmware
 - AIOC or similar USB serial + audio interface
@@ -144,7 +171,12 @@ q-remote-v3/
 │       └── stations.html   # Channel editor
 ├── docs/
 │   └── EEPROM-STRUCTURE.md # EEPROM byte layout documentation
-└── config.yaml             # Users and settings
+├── scripts/
+│   ├── install.sh          # Pi installer (deps + systemd)
+│   ├── uninstall.sh        # Remove systemd service
+│   └── q-remote.service.in # systemd unit template
+├── config.yaml             # Default settings
+└── config.local.yaml.example
 ```
 
 ## License

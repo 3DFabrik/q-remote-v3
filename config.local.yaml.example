@@ -1,0 +1,24 @@
+# Q-Remote V3 – local overrides (copy to config.local.yaml on the Pi)
+# This file is gitignored when named config.local.yaml.
+
+radio:
+  device: "/dev/ttyACM0"
+  baudrate: 38400
+
+audio:
+  device_rx: "default"
+  device_tx: "default"
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+auth:
+  login_rate_limit:
+    enabled: true
+    max_attempts: 5
+    window_seconds: 900
+    lockout_seconds: 900
+
+logging:
+  level: "INFO"

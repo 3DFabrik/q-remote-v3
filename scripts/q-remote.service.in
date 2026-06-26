@@ -1,0 +1,22 @@
+[Unit]
+Description=Q-Remote V3 – Ham Radio Web Remote
+Documentation=https://github.com/3DFabrik/q-remote-v3
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@SERVICE_USER@
+Group=@SERVICE_USER@
+WorkingDirectory=@INSTALL_DIR@
+Environment=PYTHONUNBUFFERED=1
+ExecStart=@INSTALL_DIR@/venv/bin/uvicorn backend.main:asgi_app --host @HOST@ --port @PORT@
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+
+# Serial (radio), GPIO, and ALSA audio
+SupplementaryGroups=gpio dialout audio
+
+[Install]
+WantedBy=multi-user.target
