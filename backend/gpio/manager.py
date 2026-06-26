@@ -61,10 +61,10 @@ ALL_TRIGGERS = [
 ]
 
 TRIGGER_LABELS = {
-    TRIGGER_PTT: "Bei TX (PTT)",
-    TRIGGER_BUTTON_1: "Kopfzeilen-Button 1",
-    TRIGGER_BUTTON_2: "Kopfzeilen-Button 2",
-    TRIGGER_TEMP: "Temperatur-Schwellenwert",
+    TRIGGER_PTT: "On TX (PTT)",
+    TRIGGER_BUTTON_1: "Header Button 1",
+    TRIGGER_BUTTON_2: "Header Button 2",
+    TRIGGER_TEMP: "Temperature Threshold",
 }
 
 
@@ -184,7 +184,9 @@ class GPIOManager:
         self._configs: list[PinConfig] = []
         self._button_states: dict[str, bool] = {"button1": False, "button2": False}
         self._ptt_active = False
-        self._active_sessions = 0
+        self._ptt_generation = 0
+        self._ptt_apply_task: asyncio.Task | None = None
+        self._active_users: set[str] = set()
         self._initialized = False
         self._temp_task = None
 
@@ -220,7 +222,19 @@ class GPIOManager:
             if cfg.bcm_pin in HARD_RESERVED:
                 logger.warning(f"Pin {cfg.bcm_pin} is hard-reserved, skipping")
                 continue
-            if cfg.direction == "output" and cfg.bcm_pin in ALL_RESERVED:
+
+            # Input pins (e.g. DS18B20 on 1-Wire) are sysfs-only — never gpiozero
+            if cfg.direction == "input":
+                if cfg.input_type == "ds18b20":
+                    logger.info(
+                        f"GPIO {cfg.bcm_pin} input: DS18B20 "
+                        f"'{cfg.sensor_name or '(unnamed)'}' (1-Wire, no gpiozero)"
+                    )
+                else:
+                    logger.info(f"GPIO {cfg.bcm_pin} input: config only, no gpiozero")
+                continue
+
+            if cfg.bcm_pin in ALL_RESERVED:
                 logger.warning(f"Pin {cfg.bcm_pin} is soft-reserved, skipping for output")
                 continue
 
@@ -229,7 +243,7 @@ class GPIOManager:
                 handle.init_hardware()
                 self._handles[cfg.bcm_pin] = handle
                 logger.info(
-                    f"GPIO {cfg.bcm_pin} init: "
+                    f"GPIO {cfg.bcm_pin} output init: "
                     f"{cfg.logic_level}, trigger={cfg.trigger}, "
                     f"session_bound={cfg.session_bound}"
                 )
@@ -241,7 +255,16 @@ class GPIOManager:
         self.all_off()
         # Start temperature monitor for temp-trigger pins
         self._start_temp_monitor()
-        logger.info(f"GPIO manager initialized ({len(self._handles)} pins active)")
+        output_count = len(self._handles)
+        sensor_count = sum(
+            1 for c in self._configs
+            if c.direction == "input" and c.input_type == "ds18b20"
+        )
+        logger.info(
+            f"GPIO manager initialized ({output_count} output pin"
+            f"{'' if output_count == 1 else 's'}, {sensor_count} 1-Wire sensor"
+            f"{'' if sensor_count == 1 else 's'})"
+        )
 
 
     def _start_temp_monitor(self):
@@ -292,35 +315,61 @@ class GPIOManager:
             return round(int(m.group(1)) / 1000.0, 1)
         return None
 
+    def _ds18b20_config_by_name(self) -> dict[str, PinConfig]:
+        """Map sensor_name -> input config for all DS18B20 rows."""
+        by_name: dict[str, PinConfig] = {}
+        for cfg in self._configs:
+            if cfg.input_type == "ds18b20" and cfg.sensor_name:
+                by_name[cfg.sensor_name] = cfg
+        return by_name
+
+    def _ds18b20_sensor_names_needed(self) -> set[str]:
+        """Sensor names to read: UI display and/or temp-trigger sources."""
+        names: set[str] = set()
+        for cfg in self._configs:
+            if cfg.input_type == "ds18b20" and cfg.sensor_name:
+                if cfg.show_temp:
+                    names.add(cfg.sensor_name)
+        for cfg in self._configs:
+            if cfg.trigger == TRIGGER_TEMP and cfg.temp_source:
+                names.add(cfg.temp_source)
+        return names
+
+    def _resolve_ds18b20_sensor_id(self, cfg: PinConfig | None, w1_base: Path) -> str | None:
+        """Resolve 1-Wire device id from config or auto-detect first DS18B20."""
+        sensor_id = cfg.sensor_id if cfg else ""
+        if sensor_id:
+            return sensor_id
+        if not w1_base.exists():
+            return None
+        for dev_dir in w1_base.iterdir():
+            if dev_dir.name.startswith("28-"):
+                return dev_dir.name
+        return None
+
+    def _build_temp_cache(self) -> dict[str, float | None]:
+        """Read temperatures for all sensors needed by UI and temp triggers."""
+        w1_base = Path("/sys/bus/w1/devices")
+        sensors_by_name = self._ds18b20_config_by_name()
+        temp_cache: dict[str, float | None] = {}
+
+        for name in self._ds18b20_sensor_names_needed():
+            cfg = sensors_by_name.get(name)
+            sensor_id = self._resolve_ds18b20_sensor_id(cfg, w1_base)
+            if not sensor_id:
+                temp_cache[name] = None
+                continue
+            try:
+                temp_cache[name] = self._read_sensor_temp(sensor_id, w1_base)
+            except Exception as e:
+                logger.warning(f"Temp read error for {name}: {e}")
+                temp_cache[name] = None
+
+        return temp_cache
+
     def _evaluate_temp_triggers(self):
         """Check all temp-trigger pins against their sensor thresholds."""
-        w1_base = Path("/sys/bus/w1/devices")
-        temp_cache = {}
-
-        # Build temperature cache from all configured DS18B20 sensors
-        for cfg in self._configs:
-            if cfg.input_type != "ds18b20" or not cfg.show_temp:
-                continue
-            sensor_name = cfg.sensor_name
-            if not sensor_name or sensor_name in temp_cache:
-                continue
-
-            sensor_id = cfg.sensor_id
-            if not sensor_id and w1_base.exists():
-                for dev_dir in w1_base.iterdir():
-                    if dev_dir.name.startswith("28-"):
-                        sensor_id = dev_dir.name
-                        break
-
-            if not sensor_id:
-                temp_cache[sensor_name] = None
-                continue
-
-            try:
-                temp_cache[sensor_name] = self._read_sensor_temp(sensor_id, w1_base)
-            except Exception as e:
-                logger.warning(f"Temp read error for {sensor_name}: {e}")
-                temp_cache[sensor_name] = None
+        temp_cache = self._build_temp_cache()
 
         # Evaluate each temp-trigger pin
         for handle in self._handles.values():
@@ -332,7 +381,14 @@ class GPIOManager:
             if not source_name:
                 continue
 
-            temp = temp_cache.get(source_name)
+            if source_name not in temp_cache:
+                logger.warning(
+                    f"Temp pin {cfg.bcm_pin}: source '{source_name}' "
+                    f"has no DS18B20 input configured"
+                )
+                continue
+
+            temp = temp_cache[source_name]
             if temp is None:
                 logger.debug(
                     f"Temp pin {cfg.bcm_pin}: source '{source_name}' "
@@ -373,37 +429,98 @@ class GPIOManager:
 
     # ─── Trigger Handlers ───────────────────────────
 
+    def _ptt_pin_allowed(self, cfg: PinConfig) -> bool:
+        """Return True if a PTT-triggered pin may be activated right now."""
+        if cfg.session_bound and not self._active_users:
+            return False
+        if cfg.ptt_combo_button:
+            if not self._button_states.get(cfg.ptt_combo_button, False):
+                return False
+        return True
+
+    def _set_all_ptt_pins(self, active: bool):
+        """Turn all PTT-triggered output pins on or off."""
+        for handle in self._handles.values():
+            if handle.config.trigger != TRIGGER_PTT:
+                continue
+            if active and self._ptt_pin_allowed(handle.config):
+                handle.on()
+            else:
+                handle.off()
+
+    async def _cancel_ptt_apply_task(self):
+        """Cancel any in-flight PTT sequencer work."""
+        task = self._ptt_apply_task
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        self._ptt_apply_task = None
+
+    async def _ptt_delayed_on(self, handle: PinHandle, gen: int):
+        """Activate one PTT pin after its sequencer delay, if still valid."""
+        delay_s = handle.config.sequencer_delay_ms / 1000.0
+        try:
+            await asyncio.sleep(delay_s)
+        except asyncio.CancelledError:
+            raise
+        if gen != self._ptt_generation or not self._ptt_active:
+            return
+        if not self._ptt_pin_allowed(handle.config):
+            handle.off()
+            return
+        handle.on()
+
+    async def _apply_ptt_on(self, gen: int):
+        """Apply PTT-on to eligible pins (immediate + delayed in parallel)."""
+        try:
+            ptt_handles = [
+                h for h in self._handles.values()
+                if h.config.trigger == TRIGGER_PTT and self._ptt_pin_allowed(h.config)
+            ]
+            for handle in ptt_handles:
+                if handle.config.sequencer_delay_ms <= 0:
+                    if gen != self._ptt_generation or not self._ptt_active:
+                        return
+                    handle.on()
+
+            delayed = [h for h in ptt_handles if h.config.sequencer_delay_ms > 0]
+            if delayed:
+                await asyncio.gather(
+                    *(self._ptt_delayed_on(h, gen) for h in delayed)
+                )
+        except asyncio.CancelledError:
+            raise
+        finally:
+            if gen == self._ptt_generation:
+                self._ptt_apply_task = None
+
     async def on_ptt(self, active: bool):
         """Handle PTT trigger with sequencer delay and optional combo condition.
 
         If a pin has ptt_combo_button set, the pin only activates when
         both PTT is active AND the specified button is armed.
+        Pending sequencer delays are cancelled when PTT releases.
         """
+        self._ptt_generation += 1
+        gen = self._ptt_generation
         self._ptt_active = active
 
+        await self._cancel_ptt_apply_task()
+
+        if not active:
+            self._set_all_ptt_pins(False)
+            return
+
         for handle in self._handles.values():
-            cfg = handle.config
-            if cfg.trigger != TRIGGER_PTT:
+            if handle.config.trigger != TRIGGER_PTT:
                 continue
-
-            # Session-bound check
-            if cfg.session_bound and self._active_sessions == 0:
+            if not self._ptt_pin_allowed(handle.config):
                 handle.off()
-                continue
 
-            # Combo condition: specified button must be active
-            if cfg.ptt_combo_button:
-                if not self._button_states.get(cfg.ptt_combo_button, False):
-                    handle.off()
-                    continue
-
-            if active:
-                # Sequencer delay (PA protection: relay engages before TX)
-                if cfg.sequencer_delay_ms > 0:
-                    await asyncio.sleep(cfg.sequencer_delay_ms / 1000.0)
-                handle.on()
-            else:
-                handle.off()
+        self._ptt_apply_task = asyncio.create_task(self._apply_ptt_on(gen))
 
     async def on_button_toggle(self, button_id: str, active: bool):
         """Handle header button press (button1 or button2)."""
@@ -420,7 +537,7 @@ class GPIOManager:
             if cfg.trigger != button_id:
                 continue
 
-            if cfg.session_bound and self._active_sessions == 0:
+            if cfg.session_bound and not self._active_users:
                 handle.off()
                 continue
 
@@ -439,27 +556,31 @@ class GPIOManager:
 
     # ─── Session Tracking ───────────────────────────
 
-    def on_session_login(self):
-        """Called when a user logs in."""
-        self._active_sessions += 1
-        logger.debug(f"GPIO: session login (active_sessions={self._active_sessions})")
+    def _turn_off_session_bound_pins(self):
+        """Turn off all session-bound pins (safe state)."""
+        count = 0
+        for handle in self._handles.values():
+            if handle.config.session_bound:
+                handle.off()
+                count += 1
+        if count:
+            logger.info(f"GPIO: {count} session-bound pin(s) -> OFF (no active sessions)")
 
-    def on_session_logout(self):
-        """Called when a user session ends.
+    def on_session_login(self, user: str):
+        """Called when a user logs in or reconnects after watchdog."""
+        if not user:
+            return
+        self._active_users.add(user)
+        logger.debug(f"GPIO: session login user={user} active_users={sorted(self._active_users)}")
 
-        If no sessions remain, all session-bound pins fall back to OFF.
-        """
-        self._active_sessions = max(0, self._active_sessions - 1)
-        logger.debug(f"GPIO: session logout (active_sessions={self._active_sessions})")
+    def on_session_logout(self, user: str | None):
+        """Called when a user session ends (logout, tab close, timeout, watchdog)."""
+        if user:
+            self._active_users.discard(user)
+        logger.debug(f"GPIO: session logout user={user} active_users={sorted(self._active_users)}")
 
-        if self._active_sessions == 0:
-            count = 0
-            for handle in self._handles.values():
-                if handle.config.session_bound:
-                    handle.off()
-                    count += 1
-            if count:
-                logger.info(f"GPIO: {count} session-bound pin(s) -> OFF (no active sessions)")
+        if not self._active_users:
+            self._turn_off_session_bound_pins()
 
     # ─── Status & Info ──────────────────────────────
 
@@ -529,7 +650,7 @@ class GPIOManager:
             # Auto-detect if not explicitly set
             if not sensor_id:
                 if not w1_base.exists():
-                    entry["error"] = "1-Wire nicht aktiviert (/sys/bus/w1 nicht vorhanden)"
+                    entry["error"] = "1-Wire not enabled (/sys/bus/w1 not found)"
                     results.append(entry)
                     continue
                 # Try auto-detect
@@ -538,7 +659,7 @@ class GPIOManager:
                         sensor_id = dev_dir.name
                         break
                 if not sensor_id:
-                    entry["error"] = "Kein DS18B20 Sensor gefunden (Auto-Erkennung)"
+                    entry["error"] = "No DS18B20 sensor found (auto-detect)"
                     results.append(entry)
                     continue
 
@@ -547,7 +668,7 @@ class GPIOManager:
             w1_file = w1_base / sensor_id / "w1_slave"
 
             if not w1_file.exists():
-                entry["error"] = f"Sensor nicht verbunden (ID: {sensor_id})"
+                entry["error"] = f"Sensor not connected (ID: {sensor_id})"
                 results.append(entry)
                 continue
 
@@ -556,7 +677,7 @@ class GPIOManager:
                 lines = raw.split("\n")
 
                 if lines and "YES" not in lines[0]:
-                    entry["error"] = "CRC-Pruefung fehlgeschlagen"
+                    entry["error"] = "CRC check failed"
                     results.append(entry)
                     continue
 
@@ -566,7 +687,7 @@ class GPIOManager:
                     temp_c = round(temp_raw / 1000.0, 1)
                     entry["temp"] = temp_c
                 else:
-                    entry["error"] = "Temperatur konnte nicht gelesen werden"
+                    entry["error"] = "Could not read temperature"
 
             except Exception as e:
                 entry["error"] = f"Lesefehler: {e}"

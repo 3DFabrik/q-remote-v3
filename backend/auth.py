@@ -21,8 +21,10 @@ USERS: dict = {}
 # ─── Session Timeout Tracking ──────────────────────────────────────
 
 _session_activity: dict[str, float] = {}  # username -> last activity timestamp (epoch)
+_logged_in_users: set[str] = set()        # users with active GPIO session tracking
 
 DEFAULT_TIMEOUT_MINUTES = 120  # 2 hours default
+DEFAULT_HEARTBEAT_MISS_SECONDS = 90  # ~1.5× frontend heartbeat interval (60s)
 
 activity_log = logging.getLogger("activity")
 
@@ -128,6 +130,35 @@ def clear_activity(username: str):
     _session_activity.pop(username, None)
 
 
+def register_gpio_session(username: str):
+    """Mark user as logged in for GPIO session-bound watchdog tracking."""
+    if username:
+        _logged_in_users.add(username)
+        touch_activity(username)
+
+
+def unregister_gpio_session(username: str):
+    """Remove user from GPIO session tracking."""
+    if username:
+        _logged_in_users.discard(username)
+        clear_activity(username)
+
+
+def is_gpio_session_active(username: str) -> bool:
+    return username in _logged_in_users
+
+
+def get_stale_gpio_sessions(miss_seconds: float) -> list[str]:
+    """Users with no recent heartbeat/activity (connection likely lost)."""
+    now = time.time()
+    stale: list[str] = []
+    for user in list(_logged_in_users):
+        last = _session_activity.get(user)
+        if last is None or (now - last) > miss_seconds:
+            stale.append(user)
+    return stale
+
+
 # ─── FastAPI Dependencies ──────────────────────────────────────────
 
 
@@ -143,8 +174,10 @@ async def login_required(request: Request):
     # Check timeout
     if check_timeout(user):
         request.session.pop("user", None)
-        clear_activity(user)
+        unregister_gpio_session(user)
         log_activity(user, "TIMEOUT_LOGOUT")
+        from backend.gpio import manager as gpio_manager
+        gpio_manager.on_session_logout(user)
         accept = request.headers.get("accept", "")
         if "text/html" not in accept:
             raise HTTPException(status_code=401, detail="Session expired")
@@ -163,8 +196,10 @@ async def admin_required(request: Request):
 
     if check_timeout(user):
         request.session.pop("user", None)
-        clear_activity(user)
+        unregister_gpio_session(user)
         log_activity(user, "TIMEOUT_LOGOUT")
+        from backend.gpio import manager as gpio_manager
+        gpio_manager.on_session_logout(user)
         raise HTTPException(status_code=401, detail="Session expired")
 
     if not USERS.get(user, {}).get("admin", False):

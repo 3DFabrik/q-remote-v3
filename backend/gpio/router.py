@@ -186,16 +186,19 @@ async def save_gpio_config(request: Request, _=Depends(admin_required)):
                 status_code=400,
             )
 
-    # Persist
+    # Persist and apply to hardware (all pins OFF first, then reconfigure)
     _save_gpio_config(pins)
-
-    # Reload into manager
-    manager.load_configs(pins)
+    await manager.initialize()
 
     from backend.auth import log_activity, get_current_user
     log_activity(get_current_user(request), "GPIO_CONFIG", f"pins={len(pins)}")
 
-    return {"status": "ok", "pins": len(pins)}
+    return {
+        "status": "ok",
+        "pins": len(pins),
+        "active": len(manager.get_status()),
+        "initialized": manager.initialized,
+    }
 
 
 # ─── Live Status ──────────────────────────────────────────────────
@@ -294,13 +297,13 @@ async def get_sensor_status(request: Request, _=Depends(admin_required)):
                     break
 
         if not sensor_id:
-            status["error"] = "Kein Sensor erkannt (kein 28-* Device in /sys/bus/w1/devices)"
+            status["error"] = "No sensor detected (no 28-* device in /sys/bus/w1/devices)"
         else:
             w1_file = w1_base / sensor_id / "w1_slave"
             if w1_file.exists():
                 status["detected"] = True
             else:
-                status["error"] = f"Sensor-ID {sensor_id} nicht verbunden"
+                status["error"] = f"Sensor ID {sensor_id} not connected"
 
         statuses.append(status)
 

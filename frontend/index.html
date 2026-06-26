@@ -123,6 +123,23 @@
 </script>
 <script>
     // ─── GPIO Button Bar ─────────────────────────────
+    var _gpioBarHasTemps = false;
+
+    function countVisibleGpioButtons() {
+        let visible = 0;
+        for (const id of ['button1', 'button2']) {
+            const btn = document.getElementById('gpio-btn-' + id.charAt(6));
+            if (btn.style.display !== 'none') visible++;
+        }
+        return visible;
+    }
+
+    function updateGpioBarVisibility(visibleButtons) {
+        const bar = document.getElementById('gpio-bar');
+        const buttons = visibleButtons !== undefined ? visibleButtons : countVisibleGpioButtons();
+        bar.style.display = (buttons > 0 || _gpioBarHasTemps) ? 'block' : 'none';
+    }
+
     async function loadGpioButtons() {
         try {
             const resp = await fetch('/api/gpio/buttons');
@@ -144,8 +161,7 @@
                 }
             }
 
-            const bar = document.getElementById('gpio-bar');
-            bar.style.display = visible > 0 ? 'block' : 'none';
+            updateGpioBarVisibility(visible);
         } catch(e) {
             console.warn('GPIO buttons load failed:', e);
         }
@@ -186,10 +202,13 @@
             var sensors = data.sensors || [];
             var display = document.getElementById('gpio-temp-display');
 
+            _gpioBarHasTemps = sensors.length > 0;
+
             if (sensors.length === 0) {
                 display.style.display = 'none';
                 if (_tempPollTimer) { clearInterval(_tempPollTimer); _tempPollTimer = null; }
                 display.innerHTML = '';
+                updateGpioBarVisibility();
                 return;
             }
 
@@ -203,6 +222,7 @@
                 }
             }).join('');
             display.innerHTML = html;
+            updateGpioBarVisibility();
         } catch(e) {
             console.warn('Temperature load failed:', e);
         }
@@ -228,7 +248,7 @@
                 btn.style.display = 'none';
             }
         }
-        document.getElementById('gpio-bar').style.display = visible > 0 ? 'block' : 'none';
+        updateGpioBarVisibility(visible);
     }
     </script>
 

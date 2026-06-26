@@ -25,6 +25,8 @@ from backend.auth import (
     SECRET_KEY, USERS, load_users, save_users, log_activity,
     get_current_user, get_ws_user, is_admin, login_required, admin_required,
     touch_activity, clear_activity, check_timeout, parse_timeout, get_user_timeout_minutes,
+    register_gpio_session, unregister_gpio_session, is_gpio_session_active,
+    get_stale_gpio_sessions, DEFAULT_HEARTBEAT_MISS_SECONDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,7 +37,31 @@ TEMPLATES_DIR = FRONTEND_DIR / "templates"
 rx_audio = RxPipeline()
 tx_audio = TxPipeline()
 
-jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
+jinja_env = Environment(
+    loader=FileSystemLoader(str(TEMPLATES_DIR)),
+    autoescape=True,
+    auto_reload=True,
+)
+
+
+async def _gpio_session_watchdog_loop():
+    """Turn off session-bound GPIO when heartbeats stop (connection lost)."""
+    miss_seconds = float(get("auth.heartbeat_miss_seconds", DEFAULT_HEARTBEAT_MISS_SECONDS))
+    interval = float(get("auth.heartbeat_check_interval", 30))
+    logger.info(f"GPIO session watchdog started (check every {interval}s, miss after {miss_seconds}s)")
+    while True:
+        try:
+            await asyncio.sleep(interval)
+            for user in get_stale_gpio_sessions(miss_seconds):
+                logger.warning(f"Session watchdog: no heartbeat from {user}")
+                log_activity(user, "WATCHDOG_LOGOUT", f"no heartbeat for {int(miss_seconds)}s")
+                unregister_gpio_session(user)
+                gpio_manager.on_session_logout(user)
+        except asyncio.CancelledError:
+            logger.info("GPIO session watchdog stopped")
+            raise
+        except Exception as e:
+            logger.error(f"GPIO session watchdog error: {e}", exc_info=True)
 
 
 @asynccontextmanager
@@ -67,7 +93,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"GPIO init failed (non-Pi or no gpiozero?): {e}")
 
+    watchdog_task = asyncio.create_task(_gpio_session_watchdog_loop())
+
     yield
+
+    watchdog_task.cancel()
+    try:
+        await watchdog_task
+    except asyncio.CancelledError:
+        pass
 
     gpio_manager.cleanup()
     logger.info("Shutting down...")
@@ -132,10 +166,14 @@ async def heartbeat(request: Request):
         return JSONResponse({"status": "expired"}, status_code=401)
     if check_timeout(user):
         request.session.pop("user", None)
-        clear_activity(user)
+        unregister_gpio_session(user)
         log_activity(user, "TIMEOUT_LOGOUT")
-        gpio_manager.on_session_logout()
+        gpio_manager.on_session_logout(user)
         return JSONResponse({"status": "expired"}, status_code=401)
+    # Re-register after watchdog drop (e.g. WiFi was briefly down)
+    if not is_gpio_session_active(user):
+        register_gpio_session(user)
+        gpio_manager.on_session_login(user)
     touch_activity(user)
     timeout_min = get_user_timeout_minutes(user) if user else 0
     return {"status": "ok", "timeout_minutes": timeout_min}
@@ -147,9 +185,9 @@ async def tab_close(request: Request):
     user = request.session.get("user")
     request.session.clear()
     if user:
-        clear_activity(user)
+        unregister_gpio_session(user)
         log_activity(user, "TAB_CLOSE_LOGOUT")
-        gpio_manager.on_session_logout()
+        gpio_manager.on_session_logout(user)
     return {"status": "ok"}
 
 
@@ -171,9 +209,9 @@ async def login_submit(request: Request):
     user_data = USERS.get(username, {})
     if user_data.get("password") == password:
         request.session["user"] = username
-        touch_activity(username)
+        register_gpio_session(username)
         log_activity(username, "LOGIN")
-        gpio_manager.on_session_login()
+        gpio_manager.on_session_login(username)
         return RedirectResponse(url="/", status_code=303)
     return HTMLResponse(jinja_env.get_template("login.html").render(request=request, error="Ungültige Anmeldedaten"))
 
@@ -183,9 +221,9 @@ async def logout(request: Request):
     user = request.session.get("user")
     request.session.clear()
     if user:
-        clear_activity(user)
+        unregister_gpio_session(user)
         log_activity(user, "LOGOUT")
-        gpio_manager.on_session_logout()
+        gpio_manager.on_session_logout(user)
     return RedirectResponse(url="/login", status_code=303)
 
 

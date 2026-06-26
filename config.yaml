@@ -25,6 +25,8 @@ server:
 auth:
   jwt_secret: "CHANGE-ME-IN-PRODUCTION"   # override in config.local.yaml
   session_timeout_minutes: 120
+  heartbeat_miss_seconds: 90      # GPIO session-bound: off after no heartbeat
+  heartbeat_check_interval: 30    # watchdog poll interval
   users_file: "users.yaml"
 
 logging:

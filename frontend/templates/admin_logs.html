@@ -98,7 +98,7 @@
                 <a href="/">📻 Radio</a>
                 <a href="/logout">🚪 Logout</a>
             </div>
-            <p class="count">{{ entries|length }} Einträge (neueste zuerst)</p>
+            <p class="count">{{ entries|length }} entries (newest first)</p>
             <div class="logs">
             {% for entry in entries %}
                 {% if 'LOGIN' in entry %}<div class="login">{{ entry }}</div>
