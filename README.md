@@ -1,6 +1,6 @@
 # Q-Remote V3 🤖📻
 
-Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmware. Access your radio from anywhere through the browser – live display, complete control, and a full channel editor.
+Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmware. Access your radio from anywhere through the browser – live display, complete control, GPIO peripherals, and a full channel editor.
 
 > **Special thanks to [Nic Sure](https://github.com/nicsure) for the amazing [QuanshengDock](https://github.com/nicsure/QuanshengDock) project – the firmware, protocol documentation, and C# reference implementation that made Q-Remote V3 possible. Without this foundational work, none of this would exist. 🙏
 
@@ -18,7 +18,7 @@ Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmwa
 
 ![Stations Editor](docs/screenshot-stations.jpg)
 
-*Admin panel – user management with per-user session timeout:*
+*Admin panel – user management, GPIO matrix, squelch:*
 
 ![Admin Panel](docs/screenshot-admin.jpg)
 
@@ -28,13 +28,14 @@ Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmwa
 
 **Radio Control**
 - **Live CRT Display** – Radio LCD rendered in real-time on HTML5 Canvas with anti-flicker
-- **RX Audio** – Listen to incoming radio audio in your browser (μ-law codec, 8kHz)
+- **RX Audio** – Listen to incoming radio audio in your browser (μ-law codec, 8 kHz)
 - **TX Audio** – Transmit through your browser's microphone (μ-law, click-free)
 - **Full Button Control** – 4×4 button grid matching the UV-K5 layout with correct labels
 - **PTT (Push-to-Talk)** – Hold to transmit, with TX lock for multi-user safety
 - **Analog S-Meter** – Real-time signal strength needle with continuous dBm mapping
 - **Mic Modulation Meter** – dBFS level display during transmit (MOD scale)
-- **Squelch Control** – Adjustable squelch threshold with audio gating
+- **Squelch Control** – Adjustable squelch threshold with audio gating (admin panel)
+- **Connection LEDs** – Header indicators for Socket.IO (IO), RX audio, and TX audio WebSockets
 
 **Stations Editor**
 - **Full Channel Management** – Read/write all 200 channels directly from the radio EEPROM
@@ -44,16 +45,25 @@ Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmwa
 - **Empty Channel Handling** – Empty channels are correctly hidden from the radio's channel scan
 - **Auto-Reset After Write** – Radio MCU resets automatically after EEPROM write to reload channel data
 
+**GPIO & Peripherals** (Raspberry Pi)
+- **GPIO Matrix** – Configure pins in the admin panel (outputs, triggers, labels)
+- **Triggers** – PTT sequencer delay, header buttons, temperature threshold
+- **Session-safe pins** – Optional per-pin watchdog: pin turns off on logout, tab close, or lost connection (~90 s without heartbeat)
+- **DS18B20** – 1-Wire temperature sensor on GPIO 4 (display + temp-trigger source)
+- **Header GPIO buttons** – Toggle buttons in the main UI bar (when configured)
+- **Fail-safe** – GPIO outputs forced off on service stop / crash cleanup
+
 **Multi-User & Security**
 - **Login System** – Multi-user authentication with admin panel
-- **User Management** – Add/remove users, set admin privileges
-- **Per-User Session Timeout** – Configurable inactivity timeout (HH:MM) per user via admin panel
-  - Default: 2 hours, set to `00:00` for unlimited sessions
-  - Automatic logout on timeout with redirect to login screen
-  - Tab/window close triggers immediate logout
-  - Activity tracking across all pages (radio control, station editor, admin panel)
+- **User Management** – Add/remove users, set admin privileges and per-user timeout
+- **Per-User Session Timeout** – Configurable inactivity timeout (HH:MM) per user
+  - Default: 2 hours; `00:00` = unlimited
+  - Automatic logout on timeout with redirect to login
+  - Tab/window close triggers logout for that session
+- **Session binding** – Sessions invalidated after server restart (re-login required)
+- **Login rate limiting** – Per-IP brute-force protection (configurable lockout)
 - **PTT Locking** – Only one user can transmit at a time
-- **Activity Logging** – Login, logout, timeout, PTT events tracked in activity log
+- **Activity Logging** – Login, logout, failed logins, PTT, GPIO, and admin actions
 
 ### 🔧 In Progress
 - Spectrum bandscope (SCAN protocol 0x0808 working, UI pending)
@@ -67,13 +77,14 @@ Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmwa
 | Audio Transport | Raw WebSocket + G.711 μ-law codec |
 | Backend | Python FastAPI + Uvicorn |
 | Radio Protocol | Quansheng UV-K5 Serial Protocol (QuanshengDock firmware) |
+| GPIO | gpiozero + sysfs (DS18B20) |
 | Sound Card | AIOC (All-In-One-Cable) for ALSA audio I/O |
 
 ## Hardware
 
 - **Radio:** Quansheng UV-K5 with [QuanshengDock Firmware](https://github.com/nicsure/quansheng-dock-fw) (v0.32.21q)
 - **Sound Card:** AIOC (All-In-One-Cable) – USB audio + serial in one device
-- **Server:** Raspberry Pi behind Caddy reverse proxy (automatic HTTPS)
+- **Server:** Raspberry Pi (recommended), behind Caddy or nginx reverse proxy (HTTPS)
 
 ## Quick Start
 
@@ -86,7 +97,7 @@ chmod +x scripts/install.sh scripts/uninstall.sh
 sudo ./scripts/install.sh
 ```
 
-This will:
+The installer will:
 
 - Install system packages (`python3`, `venv`, `alsa-utils`, …)
 - Create a Python virtualenv and install all pip dependencies (including `gpiozero`)
@@ -99,10 +110,11 @@ This will:
 # Service management
 sudo systemctl status q-remote
 sudo journalctl -u q-remote -f
+sudo systemctl restart q-remote
 sudo ./scripts/uninstall.sh   # remove service only (keeps data)
 ```
 
-Options: `--user pi`, `--port 8080`, `--deps-only` (no systemd), `--no-start`
+**Installer options:** `--user pi`, `--port 8080`, `--deps-only` (no systemd), `--no-start`
 
 ### Manual install
 
@@ -116,68 +128,96 @@ pip install -r requirements.txt
 
 cp config.local.yaml.example config.local.yaml
 # Edit config.local.yaml (radio device, audio, …)
-# Create users.json or log in once via admin after first manual user setup
+# Create users.json — see scripts/create_admin.py or admin panel after first login
 
 uvicorn backend.main:asgi_app --host 0.0.0.0 --port 8080
 ```
 
-Open `https://your-pi` in your browser (via reverse proxy). **HTTPS is required** for microphone access.
+### HTTPS (required for TX audio)
+
+Browsers require a **secure context** for microphone access. Put a reverse proxy in front of port 8080:
+
+- **Caddy** (recommended on Pi) – automatic Let's Encrypt certificates
+- **nginx** – manual or certbot TLS setup
+
+Open `https://your-domain` in your browser. Plain HTTP works for RX and control, but not for PTT/mic.
+
+## Configuration
+
+| File | Purpose |
+|------|---------|
+| `config.yaml` | Default settings (in git) |
+| `config.local.yaml` | Local overrides (gitignored) — radio device, logging, rate limits |
+| `users.json` | User accounts and passwords (gitignored) |
+| `config.local.yaml` → `gpio.pins` | GPIO matrix (also editable via admin UI) |
+
+Copy `config.local.yaml.example` to get started. GPIO pin definitions saved in the admin panel are written to `config.local.yaml`.
+
+**Auth / rate limiting** (`config.yaml` or `config.local.yaml`):
+
+```yaml
+auth:
+  heartbeat_miss_seconds: 90       # session-safe GPIO off after no heartbeat
+  heartbeat_check_interval: 30
+  login_rate_limit:
+    enabled: true
+    max_attempts: 5
+    window_seconds: 900
+    lockout_seconds: 900
+```
+
+See [docs/SPEC-GPIO.md](docs/SPEC-GPIO.md) for GPIO matrix details.
 
 ## Requirements
 
-- Raspberry Pi OS (or Linux) with Python 3.11+
+- Raspberry Pi OS (or Linux) with **Python 3.11+**
 - `alsa-utils` (`arecord` / `aplay`) for radio audio
 - Modern browser (Chrome, Firefox, Edge, Safari)
 - Quansheng UV-K5 with QuanshengDock firmware
 - AIOC or similar USB serial + audio interface
-- HTTPS (via Caddy, Nginx, or similar reverse proxy)
+- HTTPS reverse proxy for transmit (microphone) from the browser
 
 ## Project Structure
 
 ```
 q-remote-v3/
 ├── backend/
-│   ├── app.py              # FastAPI app, routes, audio WebSockets, heartbeat API
+│   ├── app.py              # FastAPI app, routes, audio WebSockets, heartbeat
+│   ├── main.py             # ASGI entry point (uvicorn target)
 │   ├── config.py           # YAML config loader
-│   ├── auth.py             # User auth, session management, timeout tracking
-│   ├── radio/
-│   │   ├── connection.py   # Serial protocol, radio communication, EEPROM access
-│   │   ├── protocol.py     # Packet building & parsing (XOR + CRC16)
-│   │   └── lcd.py          # LCD display state, RSSI parsing
-│   ├── audio/
-│   │   ├── rx_pipeline.py  # ALSA capture → μ-law → WebSocket
-│   │   └── tx_pipeline.py  # WebSocket → μ-law decode → ALSA playback
-│   ├── control/
-│   │   └── socketio_server.py  # SocketIO events, PTT, keys, RSSI
-│   └── stations/
-│       ├── eeprom.py       # EEPROM parser/packer (200 channels, 3 regions)
-│       └── router.py       # Stations Editor API (read/write/backup/restore/CSV)
+│   ├── auth.py             # Sessions, timeouts, GPIO session tracking
+│   ├── login_guard.py      # Login rate limiting (per IP)
+│   ├── radio/              # Serial protocol, LCD, EEPROM
+│   ├── audio/              # ALSA ↔ WebSocket pipelines
+│   ├── control/            # Socket.IO server (PTT, keys, RSSI)
+│   ├── gpio/               # GPIO manager + REST API
+│   └── stations/           # Channel editor API + EEPROM parser
 ├── frontend/
 │   ├── index.html          # Main remote control UI
-│   ├── static/
-│   │   ├── css/style.css   # Instrument-panel theme
-│   │   └── js/
-│   │       ├── app.js      # Main app, audio toggle, PTT, session heartbeat
-│   │       ├── control.js  # SocketIO client
-│   │       ├── display.js  # Canvas LCD renderer
-│   │       ├── smeter.js   # Analog S-Meter + MOD meter
-│   │       ├── audio.js    # RX audio (μ-law decode)
-│   │       ├── tx_audio.js # TX audio (mic → μ-law encode)
-│   │       └── stations.js # Stations editor frontend + session management
-│   └── templates/
-│       ├── admin.html      # User management + timeout settings
-│       ├── admin_logs.html # Activity logs
-│       ├── login.html      # Login page
-│       └── stations.html   # Channel editor
-├── docs/
-│   └── EEPROM-STRUCTURE.md # EEPROM byte layout documentation
+│   ├── static/js/          # app, control, display, smeter, audio, tx_audio, stations
+│   └── templates/          # login, admin, admin_logs, stations
 ├── scripts/
 │   ├── install.sh          # Pi installer (deps + systemd)
 │   ├── uninstall.sh        # Remove systemd service
+│   ├── create_admin.py     # Bootstrap first user (used by install.sh)
 │   └── q-remote.service.in # systemd unit template
-├── config.yaml             # Default settings
+├── docs/
+│   ├── EEPROM-STRUCTURE.md
+│   ├── SPEC-GPIO.md
+│   └── …
+├── config.yaml
 └── config.local.yaml.example
 ```
+
+## Security notes
+
+Q-Remote is designed for **internet remote access** to your shack, but please:
+
+- Use **strong passwords** and keep the admin account to yourself
+- Prefer **HTTPS** and do not expose port 8080 directly to the internet without a proxy
+- Review `auth.login_rate_limit` settings for your threat model
+- Treat GPIO outputs as **real hardware** — use session-safe pins for PA/relay lines
+- `users.json` contains plaintext passwords; protect the file (`chmod 600`)
 
 ## License
 
