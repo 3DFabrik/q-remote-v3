@@ -28,6 +28,15 @@ auth:
   heartbeat_miss_seconds: 90      # GPIO session-bound: off after no heartbeat
   heartbeat_check_interval: 30    # watchdog poll interval
   users_file: "users.yaml"
+  login_rate_limit:
+    enabled: true
+    max_attempts: 5               # failed logins per IP within window
+    window_seconds: 900           # 15 minutes
+    lockout_seconds: 900          # block IP for 15 minutes after limit hit
+    delay_seconds: 0.75           # slow down each failed/blocked attempt
+    trusted_proxies:              # use X-Forwarded-For when request comes from these
+      - "127.0.0.1"
+      - "::1"
 
 logging:
   level: "DEBUG"               # DEBUG, INFO, WARNING, ERROR

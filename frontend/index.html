@@ -12,9 +12,22 @@
         <header>
             <div class=header-brand>
                 <h1>Q-Remote V3</h1>
-                <div class=status-indicator>
-                    <div id=status-light class=status-light></div>
-                    <span id=status>INIT</span>
+                <div class="status-indicator">
+                    <div class="link-leds">
+                        <div class="link-led" title="Control (Socket.IO)">
+                            <div id="led-io" class="status-light"></div>
+                            <span>IO</span>
+                        </div>
+                        <div class="link-led" title="RX Audio WebSocket">
+                            <div id="led-rx" class="status-light"></div>
+                            <span>RX</span>
+                        </div>
+                        <div class="link-led" title="TX Audio WebSocket">
+                            <div id="led-tx" class="status-light"></div>
+                            <span>TX</span>
+                        </div>
+                    </div>
+                    <span id="status">INIT</span>
                 </div>
             </div>
             <div class=header-center>

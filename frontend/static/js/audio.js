@@ -12,6 +12,7 @@ export class RxAudio {
         this.muted = false;
         this._pcmBuffer = [];
         this._reconnectTimer = null;
+        this.onConnectionChange = null;  // (connected: boolean) => {}
 
         // ulaw decode table
         this._ulawTable = new Float32Array(256);
@@ -58,6 +59,7 @@ export class RxAudio {
         this.ws.onopen = () => {
             this.connected = true;
             console.log("[RxAudio] WebSocket connected");
+            if (this.onConnectionChange) this.onConnectionChange(true);
             if (this.audioCtx && this.audioCtx.state === "suspended") {
                 this.audioCtx.resume();
             }
@@ -76,6 +78,7 @@ export class RxAudio {
 
         this.ws.onclose = () => {
             this.connected = false;
+            if (this.onConnectionChange) this.onConnectionChange(false);
             console.log("[RxAudio] WebSocket closed, reconnecting...");
             this._reconnectTimer = setTimeout(() => this._connectWS(), 1000);
         };
@@ -104,6 +107,7 @@ export class RxAudio {
             this.audioCtx = null;
         }
         this.connected = false;
+        if (this.onConnectionChange) this.onConnectionChange(false);
     }
 
     toggleMute() {

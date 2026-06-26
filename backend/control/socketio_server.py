@@ -14,7 +14,7 @@ import socketio
 from backend.radio.connection import RadioConnection
 from backend.radio.protocol import Packet
 from backend.radio.lcd import LCDDisplay
-from backend.auth import USERS, SECRET_KEY, log_activity, touch_activity, check_timeout, clear_activity
+from backend.auth import USERS, SECRET_KEY, log_activity, touch_activity, check_timeout, clear_activity, get_valid_user_from_cookie_data
 from backend.gpio import manager as gpio_manager
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ def _get_user_from_environ(environ: dict) -> Optional[str]:
             data = signer.unsign(session_cookie.value, max_age=None)
             import base64, json
             session_data = json.loads(base64.b64decode(data))
-            return session_data.get('user')
+            return get_valid_user_from_cookie_data(session_data)
     except Exception as e:
         logger.debug(f"Session decode failed: {e}")
     return None

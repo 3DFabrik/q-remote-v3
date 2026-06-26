@@ -12,9 +12,12 @@ export class TxAudio {
         this.stream = null;
         this.connected = false;
         this.transmitting = false;
+        this._reconnectTimer = null;
+        this._stopped = false;
 
         // Mic level callback: onMicLevel(normalized 0..1)
         this.onMicLevel = null;
+        this.onConnectionChange = null;  // (connected: boolean) => {}
 
         // μ-law encode table (linear → μ-law)
         this._ulawEncode = new Uint8Array(65536);
@@ -48,6 +51,7 @@ export class TxAudio {
     }
 
     async start() {
+        this._stopped = false;
         try {
             // Request mic access
             this.stream = await navigator.mediaDevices.getUserMedia({
@@ -129,11 +133,16 @@ export class TxAudio {
         this.ws.onopen = () => {
             this.connected = true;
             console.log('[TxAudio] WebSocket connected');
+            if (this.onConnectionChange) this.onConnectionChange(true);
         };
 
         this.ws.onclose = () => {
             this.connected = false;
+            if (this.onConnectionChange) this.onConnectionChange(false);
             console.log('[TxAudio] WebSocket closed');
+            if (!this._stopped) {
+                this._reconnectTimer = setTimeout(() => this._connectWS(), 1000);
+            }
         };
 
         this.ws.onerror = (e) => {
@@ -156,6 +165,11 @@ export class TxAudio {
 
     stop() {
         this.transmitting = false;
+        this._stopped = true;
+        if (this._reconnectTimer) {
+            clearTimeout(this._reconnectTimer);
+            this._reconnectTimer = null;
+        }
         if (this.ws) {
             this.ws.onclose = null;
             this.ws.close();
@@ -174,5 +188,6 @@ export class TxAudio {
             this.stream = null;
         }
         this.connected = false;
+        if (this.onConnectionChange) this.onConnectionChange(false);
     }
 }

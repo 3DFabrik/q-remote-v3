@@ -21,12 +21,21 @@ from backend.audio.rx_pipeline import RxPipeline
 from backend.audio.tx_pipeline import TxPipeline
 from backend.stations.router import stations_router
 from backend.gpio import manager as gpio_manager
+from backend.login_guard import (
+    get_client_ip,
+    check_login_allowed,
+    record_login_failure,
+    record_login_success,
+    apply_login_delay,
+    format_retry_message,
+)
 from backend.auth import (
     SECRET_KEY, USERS, load_users, save_users, log_activity,
-    get_current_user, get_ws_user, is_admin, login_required, admin_required,
+    get_current_user, get_valid_user, get_valid_ws_user, is_admin, login_required, admin_required,
     touch_activity, clear_activity, check_timeout, parse_timeout, get_user_timeout_minutes,
     register_gpio_session, unregister_gpio_session, is_gpio_session_active,
     get_stale_gpio_sessions, DEFAULT_HEARTBEAT_MISS_SECONDS,
+    establish_session, clear_session,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,6 +51,8 @@ jinja_env = Environment(
     autoescape=True,
     auto_reload=True,
 )
+
+NO_STORE_HEADERS = {"Cache-Control": "no-store, no-cache, must-revalidate"}
 
 
 async def _gpio_session_watchdog_loop():
@@ -161,14 +172,9 @@ async def get_status():
 @app.post("/api/heartbeat")
 async def heartbeat(request: Request):
     """Keep session alive while tab is open. Returns session status."""
-    user = get_current_user(request)
+    user = get_valid_user(request)
     if not user:
-        return JSONResponse({"status": "expired"}, status_code=401)
-    if check_timeout(user):
-        request.session.pop("user", None)
-        unregister_gpio_session(user)
-        log_activity(user, "TIMEOUT_LOGOUT")
-        gpio_manager.on_session_logout(user)
+        clear_session(request)
         return JSONResponse({"status": "expired"}, status_code=401)
     # Re-register after watchdog drop (e.g. WiFi was briefly down)
     if not is_gpio_session_active(user):
@@ -195,25 +201,52 @@ async def tab_close(request: Request):
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    user = get_current_user(request)
-    if user:
+    if get_valid_user(request):
         return RedirectResponse(url="/", status_code=303)
-    return HTMLResponse(jinja_env.get_template("login.html").render(request=request))
+    return HTMLResponse(
+        jinja_env.get_template("login.html").render(request=request),
+        headers=NO_STORE_HEADERS,
+    )
 
 
 @app.post("/login")
 async def login_submit(request: Request):
+    client_ip = get_client_ip(request)
+    allowed, retry_after = check_login_allowed(client_ip)
+    if not allowed:
+        await apply_login_delay()
+        log_activity("-", "LOGIN_BLOCKED", f"ip={client_ip} retry={retry_after}s")
+        return HTMLResponse(
+            jinja_env.get_template("login.html").render(
+                request=request,
+                error=format_retry_message(retry_after),
+            ),
+            headers=NO_STORE_HEADERS,
+            status_code=429,
+        )
+
     form = await request.form()
-    username = form.get("username", "")
-    password = form.get("password", "")
+    username = (form.get("username") or "").strip()
+    password = form.get("password") or ""
     user_data = USERS.get(username, {})
     if user_data.get("password") == password:
-        request.session["user"] = username
-        register_gpio_session(username)
-        log_activity(username, "LOGIN")
+        record_login_success(client_ip)
+        establish_session(request, username)
+        log_activity(username, "LOGIN", f"ip={client_ip}")
         gpio_manager.on_session_login(username)
         return RedirectResponse(url="/", status_code=303)
-    return HTMLResponse(jinja_env.get_template("login.html").render(request=request, error="Ungültige Anmeldedaten"))
+
+    record_login_failure(client_ip)
+    await apply_login_delay()
+    log_activity(username or "-", "LOGIN_FAILED", f"ip={client_ip}")
+    return HTMLResponse(
+        jinja_env.get_template("login.html").render(
+            request=request,
+            error="Invalid callsign or password.",
+        ),
+        headers=NO_STORE_HEADERS,
+        status_code=401,
+    )
 
 
 @app.get("/logout")
@@ -308,29 +341,23 @@ async def admin_logs_download(request: Request, _=Depends(admin_required)):
 # ─── Main Page (auth required) ────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
-async def serve_index(request: Request):
-    user = get_current_user(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=303)
+async def serve_index(request: Request, user: str = Depends(login_required)):
     html = (FRONTEND_DIR / "index.html").read_text()
     is_user_admin = USERS.get(user, {}).get("admin", False)
-    timeout_min = get_user_timeout_minutes(user) if user else 0
+    timeout_min = get_user_timeout_minutes(user)
     user_json = json.dumps({"name": user, "admin": is_user_admin, "timeout_minutes": timeout_min})
     inject = f'<script>window.CURRENT_USER = {user_json};</script>'
     html = html.replace("</head>", inject + "</head>", 1)
-    return HTMLResponse(content=html)
+    return HTMLResponse(content=html, headers=NO_STORE_HEADERS)
 
 
 # ─── Audio WebSockets (auth required) ─────────────────────────────
 
 @app.websocket("/audio/rx")
 async def audio_rx_ws(websocket: WebSocket):
-    user = get_ws_user(websocket)
+    user = get_valid_ws_user(websocket)
     if not user:
         await websocket.close(code=4001, reason="Not authenticated")
-        return
-    if check_timeout(user):
-        await websocket.close(code=4001, reason="Session expired")
         return
     touch_activity(user)
 
@@ -351,12 +378,9 @@ async def audio_rx_ws(websocket: WebSocket):
 
 @app.websocket("/audio/tx")
 async def audio_tx_ws(websocket: WebSocket):
-    user = get_ws_user(websocket)
+    user = get_valid_ws_user(websocket)
     if not user:
         await websocket.close(code=4001, reason="Not authenticated")
-        return
-    if check_timeout(user):
-        await websocket.close(code=4001, reason="Session expired")
         return
     touch_activity(user)
 

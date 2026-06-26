@@ -11,10 +11,13 @@ import { TxAudio } from "./tx_audio.js";
 const state = {
     radioConnected: false,
     pttActive: false,
+    links: { control: false, rx: false, tx: false },
 };
 
 const statusEl = document.getElementById("status");
-const statusLight = document.getElementById("status-light");
+const ledIo = document.getElementById("led-io");
+const ledRx = document.getElementById("led-rx");
+const ledTx = document.getElementById("led-tx");
 const pttBtn = document.getElementById("ptt-btn");
 const smeterCanvas = document.getElementById("smeter-canvas");
 const lcdCanvas = document.getElementById("lcd");
@@ -89,29 +92,65 @@ function setupGlobal401Handler() {
 
 // ─── End Session Timeout ────────────────────────────────────────
 
+let audioActive = false;
+const audioBtn = document.getElementById("audio-btn");
+const audioIcon = audioBtn?.querySelector(".audio-icon");
+
+function setLed(el, mode) {
+    // mode: 'on' (green), 'error' (red), 'off' (gray)
+    el.className = mode === "on" ? "status-light on" : mode === "error" ? "status-light error" : "status-light";
+}
+
+function updateConnectionStatus() {
+    const { control, rx, tx } = state.links;
+    setLed(ledIo, control ? "on" : "error");
+
+    if (audioActive) {
+        setLed(ledRx, rx ? "on" : "error");
+        setLed(ledTx, tx ? "on" : "error");
+    } else {
+        setLed(ledRx, "off");
+        setLed(ledTx, "off");
+    }
+
+    if (!control) {
+        statusEl.textContent = "OFFLINE";
+    } else if (audioActive && (!rx || !tx)) {
+        statusEl.textContent = "AUDIO";
+    } else if (state.radioConnected) {
+        statusEl.textContent = "ONLINE";
+    } else {
+        statusEl.textContent = "NO RADIO";
+    }
+}
+
 
 async function init() {
     console.log("Q-Remote V3 starting...");
 
+    try {
+        const sessionResp = await fetch("/api/heartbeat", { method: "POST" });
+        if (sessionResp.status === 401) {
+            window.location.replace("/login");
+            return;
+        }
+    } catch (e) {
+        console.warn("Session check failed:", e);
+    }
+
     control.onConnect = () => {
-        statusEl.textContent = "CONNECTED";
-        statusLight.className = "status-light on";
+        state.links.control = true;
+        updateConnectionStatus();
     };
 
     control.onDisconnect = () => {
-        statusEl.textContent = "OFFLINE";
-        statusLight.className = "status-light error";
+        state.links.control = false;
+        updateConnectionStatus();
     };
 
     control.onRadioState = (radioState) => {
         state.radioConnected = radioState === "connected";
-        if (radioState === "connected") {
-            statusEl.textContent = "ONLINE";
-            statusLight.className = "status-light on";
-        } else {
-            statusEl.textContent = radioState.toUpperCase();
-            statusLight.className = "status-light error";
-        }
+        updateConnectionStatus();
     };
 
     let _lcdTimer = null;
@@ -170,6 +209,15 @@ async function init() {
         }
     };
 
+    rxAudio.onConnectionChange = (connected) => {
+        state.links.rx = connected;
+        updateConnectionStatus();
+    };
+    txAudio.onConnectionChange = (connected) => {
+        state.links.tx = connected;
+        updateConnectionStatus();
+    };
+
     control.connect();
     setupButtons();
     setupPTT();
@@ -218,14 +266,11 @@ function setupPTT() {
     pttBtn.addEventListener("pointercancel", release);
 }
 
-let audioActive = false;
-const audioBtn = document.getElementById("audio-btn");
-const audioIcon = audioBtn.querySelector(".audio-icon");
-
 async function startAudio() {
     audioBtn.classList.add("active");
     audioIcon.textContent = "\u{1F50A}";
     audioActive = true;
+    updateConnectionStatus();
     await rxAudio.start();
     await txAudio.start();
 }
@@ -234,8 +279,11 @@ function stopAudio() {
     audioBtn.classList.remove("active");
     audioIcon.textContent = "\u{1F507}";
     audioActive = false;
+    state.links.rx = false;
+    state.links.tx = false;
     rxAudio.stop();
     txAudio.stop();
+    updateConnectionStatus();
 }
 
 function setupAudioToggle() {

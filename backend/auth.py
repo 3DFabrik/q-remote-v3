@@ -2,6 +2,7 @@
 
 import json
 import logging
+import secrets
 import time
 from pathlib import Path
 from datetime import datetime
@@ -17,6 +18,9 @@ USER_FILE = Path(__file__).parent.parent / "users.json"
 LOG_DIR = Path(__file__).parent.parent / "logs"
 
 USERS: dict = {}
+
+# Invalidates browser sessions after server restart (in-memory state is lost).
+_SERVER_BOOT_ID: str = secrets.token_hex(16)
 
 # ─── Session Timeout Tracking ──────────────────────────────────────
 
@@ -68,8 +72,57 @@ def save_users():
 
 
 def get_current_user(request: Request) -> Optional[str]:
-    """Get the currently logged-in username from the session, or None."""
+    """Get the username from the session cookie, without validity checks."""
     return request.session.get("user")
+
+
+def get_valid_user(request: Request) -> Optional[str]:
+    """Return username only if session is valid for this server process."""
+    user = request.session.get("user")
+    if not user:
+        return None
+    if request.session.get("boot") != _SERVER_BOOT_ID:
+        return None
+    if check_timeout(user):
+        return None
+    return user
+
+
+def get_valid_ws_user(websocket) -> Optional[str]:
+    """Validated username from WebSocket session scope."""
+    session = websocket.scope.get("session", {})
+    user = session.get("user")
+    if not user:
+        return None
+    if session.get("boot") != _SERVER_BOOT_ID:
+        return None
+    if check_timeout(user):
+        return None
+    return user
+
+
+def get_valid_user_from_cookie_data(session_data: dict) -> Optional[str]:
+    """Validate decoded session cookie (e.g. Socket.IO connect)."""
+    user = session_data.get("user")
+    if not user:
+        return None
+    if session_data.get("boot") != _SERVER_BOOT_ID:
+        return None
+    if check_timeout(user):
+        return None
+    return user
+
+
+def establish_session(request: Request, username: str):
+    """Create a fresh session bound to this server process."""
+    request.session["user"] = username
+    request.session["boot"] = _SERVER_BOOT_ID
+    register_gpio_session(username)
+
+
+def clear_session(request: Request):
+    """Remove session cookie data."""
+    request.session.clear()
 
 
 def get_ws_user(websocket) -> Optional[str]:
@@ -162,51 +215,61 @@ def get_stale_gpio_sessions(miss_seconds: float) -> list[str]:
 # ─── FastAPI Dependencies ──────────────────────────────────────────
 
 
+def _auth_redirect_or_401(request: Request):
+    accept = request.headers.get("accept", "")
+    if "text/html" not in accept:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return RedirectResponse(url="/login", status_code=303)
+
+
+def _logout_timed_out_user(request: Request, user: str):
+    request.session.clear()
+    unregister_gpio_session(user)
+    log_activity(user, "TIMEOUT_LOGOUT")
+    from backend.gpio import manager as gpio_manager
+    gpio_manager.on_session_logout(user)
+
+
 async def login_required(request: Request):
     """Redirect to /login if not authenticated or session timed out."""
-    user = get_current_user(request)
-    if not user:
-        accept = request.headers.get("accept", "")
-        if "text/html" not in accept:
-            raise HTTPException(status_code=401, detail="Not authenticated")
-        return RedirectResponse(url="/login", status_code=303)
+    user = request.session.get("user")
+    boot = request.session.get("boot")
 
-    # Check timeout
-    if check_timeout(user):
-        request.session.pop("user", None)
-        unregister_gpio_session(user)
-        log_activity(user, "TIMEOUT_LOGOUT")
-        from backend.gpio import manager as gpio_manager
-        gpio_manager.on_session_logout(user)
+    if user and boot == _SERVER_BOOT_ID and check_timeout(user):
+        _logout_timed_out_user(request, user)
         accept = request.headers.get("accept", "")
         if "text/html" not in accept:
             raise HTTPException(status_code=401, detail="Session expired")
         return RedirectResponse(url="/login", status_code=303)
 
-    # Touch activity on valid request
-    touch_activity(user)
-    return user
+    valid = get_valid_user(request)
+    if not valid:
+        clear_session(request)
+        return _auth_redirect_or_401(request)
+
+    touch_activity(valid)
+    return valid
 
 
 async def admin_required(request: Request):
     """Raise 401 if not authenticated, 403 if not admin."""
-    user = get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    user = request.session.get("user")
+    boot = request.session.get("boot")
 
-    if check_timeout(user):
-        request.session.pop("user", None)
-        unregister_gpio_session(user)
-        log_activity(user, "TIMEOUT_LOGOUT")
-        from backend.gpio import manager as gpio_manager
-        gpio_manager.on_session_logout(user)
+    if user and boot == _SERVER_BOOT_ID and check_timeout(user):
+        _logout_timed_out_user(request, user)
         raise HTTPException(status_code=401, detail="Session expired")
 
-    if not USERS.get(user, {}).get("admin", False):
+    valid = get_valid_user(request)
+    if not valid:
+        clear_session(request)
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    if not USERS.get(valid, {}).get("admin", False):
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    touch_activity(user)
-    return user
+    touch_activity(valid)
+    return valid
 
 
 # ─── Init ──────────────────────────────────────────────────────────
