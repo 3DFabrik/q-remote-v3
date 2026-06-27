@@ -17,6 +17,7 @@ class ControlModule {
         this.onRssiUpdate = null;      // (dbm, sUnit, sRaw) => {}
         this.onRadioState = null;      // (state) => {}
         this.onPttStatus = null;       // (active, holder, error, user) => {}
+        this.onTone1750Status = null;  // (ok, error) => {}
         this.onConnect = null;         // () => {}
         this.onDisconnect = null;      // () => {}
         this.onGpioButtons = null;     // (buttons) => {}
@@ -65,7 +66,15 @@ class ControlModule {
         });
         
         this.socket.on('ptt_status', (data) => {
-            if (this.onPttStatus) this.onPttStatus(data.active, data.holder, data.error, data.user);
+            if (this.onPttStatus) {
+                this.onPttStatus(data.active, data.holder, data.error, data.user);
+            }
+        });
+
+        this.socket.on('tone_1750_status', (data) => {
+            if (this.onTone1750Status) {
+                this.onTone1750Status(!!data.ok, data.error);
+            }
         });
     }
     
@@ -84,6 +93,12 @@ class ControlModule {
     pttOff() {
         if (this.socket && this.connected) {
             this.socket.emit('ptt_off');
+        }
+    }
+
+    tone1750() {
+        if (this.socket && this.connected) {
+            this.socket.emit('tone_1750');
         }
     }
     

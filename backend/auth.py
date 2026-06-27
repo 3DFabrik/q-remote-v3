@@ -9,7 +9,6 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import Request, Depends, HTTPException
-from starlette.responses import RedirectResponse
 
 # ─── Config ────────────────────────────────────────────────────────
 
@@ -216,10 +215,7 @@ def get_stale_gpio_sessions(miss_seconds: float) -> list[str]:
 
 
 def _auth_redirect_or_401(request: Request):
-    accept = request.headers.get("accept", "")
-    if "text/html" not in accept:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return RedirectResponse(url="/login", status_code=303)
+    raise HTTPException(status_code=401, detail="Not authenticated")
 
 
 def _logout_timed_out_user(request: Request, user: str):
@@ -230,22 +226,19 @@ def _logout_timed_out_user(request: Request, user: str):
     gpio_manager.on_session_logout(user)
 
 
-async def login_required(request: Request):
-    """Redirect to /login if not authenticated or session timed out."""
+async def login_required(request: Request) -> str:
+    """Require login; 401 is turned into /login redirect for HTML by app exception handler."""
     user = request.session.get("user")
     boot = request.session.get("boot")
 
     if user and boot == _SERVER_BOOT_ID and check_timeout(user):
         _logout_timed_out_user(request, user)
-        accept = request.headers.get("accept", "")
-        if "text/html" not in accept:
-            raise HTTPException(status_code=401, detail="Session expired")
-        return RedirectResponse(url="/login", status_code=303)
+        raise HTTPException(status_code=401, detail="Session expired")
 
     valid = get_valid_user(request)
     if not valid:
         clear_session(request)
-        return _auth_redirect_or_401(request)
+        _auth_redirect_or_401(request)
 
     touch_activity(valid)
     return valid

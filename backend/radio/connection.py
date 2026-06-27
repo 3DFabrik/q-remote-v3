@@ -260,16 +260,43 @@ class RadioConnection:
         log.warning(f"WRITE EEPROM TIMEOUT: offset=0x{offset:04X} buf={len(buf)}b")
         return False  # Timeout
 
-    def disconnect(self):
+    def disconnect(self, emit_event: bool = True):
+        was_up = self.connected or (self.port and getattr(self.port, "is_open", False))
         self._running = False
         self.connected = False
-        # RSSI poll thread will exit via self._running check
+        if self._reader_thread and self._reader_thread.is_alive():
+            self._reader_thread.join(timeout=2.0)
         try:
             if self.port and self.port.is_open:
                 self.port.close()
         except Exception:
             pass
-        self._safe_emit('on_disconnect')
+        if emit_event and was_up:
+            self._safe_emit('on_disconnect')
+
+    def reconnect(self) -> bool:
+        """Close and reopen the serial link (no disconnect callback)."""
+        self.disconnect(emit_event=False)
+        time.sleep(0.3)
+        return self.connect()
+
+    def force_release_ptt(self, attempts: int = 3) -> bool:
+        """Best-effort PTT release when the link may be half-dead."""
+        if not self.port or not getattr(self.port, "is_open", False):
+            return False
+        pkt = build_packet(Packet.KEY_PRESS, u16(13), 0x12345678)
+        ok = False
+        for _ in range(attempts):
+            try:
+                with self._lock:
+                    self.port.write(pkt)
+                    self.port.flush()
+                ok = True
+                time.sleep(0.05)
+            except Exception as e:
+                log.error(f"Force PTT release failed: {e}")
+                break
+        return ok
 
     def send_hello(self):
         self.send_command(Packet.HELLO, 0x12345678)
@@ -285,9 +312,30 @@ class RadioConnection:
             except Exception as e:
                 log.error(f"Send error: {e}")
                 self.connected = False
+                self._safe_emit('on_disconnect')
 
     def send_key(self, key_code):
         self.send_command(Packet.KEY_PRESS, u16(key_code), 0x12345678)
+
+    def write_registers(self, pairs: list[tuple[int, int]]) -> None:
+        """Write BK4819 register pairs via WRITE_REGISTERS (0x850)."""
+        if not pairs:
+            return
+        args = [u16(len(pairs))]
+        for reg, val in pairs:
+            args.extend([u16(reg), u16(val)])
+        self.send_command(Packet.WRITE_REGISTERS, *args)
+
+    @staticmethod
+    def _scale_tone_freq(freq_hz: int) -> int:
+        return ((freq_hz * 1353245) + 65536) >> 17
+
+    def send_1750_tone(self, duration_s: float = 1.0) -> None:
+        """Send ~1s 1750 Hz repeater tone while TX is active (QuanshengDock BK4819)."""
+        tone_val = self._scale_tone_freq(1750)
+        self.write_registers([(0x70, 0xBF00), (0x71, tone_val)])
+        time.sleep(duration_s)
+        self.write_registers([(0x70, 0)])
 
     def request_rssi(self):
         # Try both methods: GET_RSSI and register 0x67

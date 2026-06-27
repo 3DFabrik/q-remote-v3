@@ -31,6 +31,7 @@ lcd: Optional[LCDDisplay] = None
 _ptt_owner: Optional[str] = None
 _sid_users: dict = {}  # sid -> username
 _ptt_drain_task: Optional[asyncio.Task] = None
+_tone_1750_busy = False
 _PTT_DRAIN_DELAY = 0.8
 
 _rssi_raw_history = []
@@ -144,8 +145,9 @@ async def _on_radio_connect():
 async def _on_radio_disconnect():
     global _ptt_owner
     _ptt_owner = None
-    import asyncio as _a
-    _a.create_task(gpio_manager.on_ptt(False))
+    if radio:
+        radio.force_release_ptt()
+    asyncio.create_task(gpio_manager.on_ptt(False))
     await sio.emit('radio_state', {'state': 'disconnected'})
 
 
@@ -236,6 +238,66 @@ async def ptt_on(sid, data=None):
     if lcd:
         await asyncio.sleep(0.15)
         lcd.force_flush()
+
+
+@sio.event
+async def tone_1750(sid, data=None):
+    """Send 1750 Hz repeater tone. Auto-engages PTT if idle; releases after tone unless user holds PTT."""
+    global _tone_1750_busy, _ptt_owner, _ptt_drain_task
+    user = _sid_users.get(sid)
+    if not user:
+        return
+    if check_timeout(user):
+        await sio.disconnect(sid)
+        return
+    touch_activity(user)
+
+    if not radio or not radio.connected:
+        await sio.emit('tone_1750_status', {'ok': False, 'error': 'Radio offline'}, to=sid)
+        return
+    if _tone_1750_busy:
+        return
+    if _ptt_owner is not None and _ptt_owner != sid:
+        await sio.emit('tone_1750_status', {'ok': False, 'error': 'PTT locked'}, to=sid)
+        return
+
+    auto_release = _ptt_owner is None
+    if auto_release:
+        if _ptt_drain_task and not _ptt_drain_task.done():
+            _ptt_drain_task.cancel()
+            _ptt_drain_task = None
+        _ptt_owner = sid
+        radio.send_key(16)
+        await asyncio.sleep(0.1)
+        await gpio_manager.on_ptt(True)
+        await sio.emit('ptt_status', {'active': True, 'holder': sid, 'user': user})
+        if lcd:
+            await asyncio.sleep(0.15)
+            lcd.force_flush()
+
+    _tone_1750_busy = True
+    try:
+        await asyncio.to_thread(radio.send_1750_tone)
+        log_activity(user, 'TONE_1750', 'auto_ptt' if auto_release else 'held_ptt')
+        if auto_release and _ptt_owner == sid:
+            await gpio_manager.on_ptt(False)
+            radio.send_key(13)
+            _ptt_owner = None
+            await sio.emit('ptt_status', {'active': False, 'holder': None, 'user': None})
+            if lcd:
+                await asyncio.sleep(0.15)
+                lcd.force_flush()
+        await sio.emit('tone_1750_status', {'ok': True}, to=sid)
+    except Exception as exc:
+        logger.exception('1750 Hz tone failed')
+        if auto_release and _ptt_owner == sid:
+            await gpio_manager.on_ptt(False)
+            radio.send_key(13)
+            _ptt_owner = None
+            await sio.emit('ptt_status', {'active': False, 'holder': None, 'user': None})
+        await sio.emit('tone_1750_status', {'ok': False, 'error': str(exc)}, to=sid)
+    finally:
+        _tone_1750_busy = False
 
 
 @sio.event

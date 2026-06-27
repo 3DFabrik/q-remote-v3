@@ -2,7 +2,7 @@
  * Q-Remote V3 - Main Application
  */
 
-import { control } from "./control.js";
+import { control } from "./control.js?v=4.6";
 import { DisplayRenderer } from "./display.js";
 import { AnalogSMeter } from "./smeter.js";
 import { RxAudio } from "./audio.js";
@@ -11,6 +11,8 @@ import { TxAudio } from "./tx_audio.js";
 const state = {
     radioConnected: false,
     pttActive: false,
+    pttHolderIsMe: false,
+    remotePttUser: null,
     links: { control: false, rx: false, tx: false },
 };
 
@@ -19,9 +21,66 @@ const ledIo = document.getElementById("led-io");
 const ledRx = document.getElementById("led-rx");
 const ledTx = document.getElementById("led-tx");
 const pttBtn = document.getElementById("ptt-btn");
+const tone1750Btn = document.getElementById("tone-1750-btn");
 const smeterCanvas = document.getElementById("smeter-canvas");
 const lcdCanvas = document.getElementById("lcd");
 const pttNetStatus = document.getElementById("ptt-net-status");
+
+let _localPttDown = false;
+let _tone1750Cooldown = false;
+let _tone1750CooldownTimer = null;
+
+function isPttMine(active, holder, user) {
+    if (!active) return false;
+    if (user && user === window.CURRENT_USER?.name) return true;
+    if (holder && control.socket && holder === control.socket.id) return true;
+    return false;
+}
+
+function clearTone1750Cooldown() {
+    if (_tone1750CooldownTimer) {
+        clearTimeout(_tone1750CooldownTimer);
+        _tone1750CooldownTimer = null;
+    }
+    _tone1750Cooldown = false;
+    if (tone1750Btn) {
+        tone1750Btn.classList.remove("sending");
+    }
+}
+
+function resetAutoTonePttUi() {
+    if (_localPttDown) return;
+    state.pttActive = false;
+    state.pttHolderIsMe = false;
+    state.remotePttUser = null;
+    pttBtn.classList.remove("active");
+    smeter.isTX = false;
+    smeter.setRX(0);
+    txAudio.stopTransmit();
+    rxAudio.muted = false;
+    pttNetStatus.textContent = "";
+}
+
+function updateToneButtonState() {
+    if (!tone1750Btn) return;
+    tone1750Btn.disabled = !state.radioConnected || !!state.remotePttUser || _tone1750Cooldown;
+}
+
+function finishTone1750() {
+    clearTone1750Cooldown();
+    resetAutoTonePttUi();
+    updateToneButtonState();
+}
+
+function sendTone1750() {
+    if (!tone1750Btn || tone1750Btn.disabled) return;
+    _tone1750Cooldown = true;
+    tone1750Btn.classList.add("sending");
+    tone1750Btn.disabled = true;
+    control.tone1750();
+    if (_tone1750CooldownTimer) clearTimeout(_tone1750CooldownTimer);
+    _tone1750CooldownTimer = setTimeout(finishTone1750, 2500);
+}
 
 const display = new DisplayRenderer(lcdCanvas);
 const smeter = new AnalogSMeter(smeterCanvas);
@@ -125,6 +184,22 @@ function updateConnectionStatus() {
 }
 
 
+function releasePttLocal(reason) {
+    console.warn("[PTT] Local release:", reason);
+    txAudio.stopTransmit();
+    if (state.pttActive) {
+        control.pttOff();
+    }
+    state.pttActive = false;
+    state.pttHolderIsMe = false;
+    state.remotePttUser = null;
+    _localPttDown = false;
+    pttBtn.classList.remove("active");
+    smeter.isTX = false;
+    pttNetStatus.textContent = "";
+    updateToneButtonState();
+}
+
 async function init() {
     console.log("Q-Remote V3 starting...");
 
@@ -141,16 +216,22 @@ async function init() {
     control.onConnect = () => {
         state.links.control = true;
         updateConnectionStatus();
+        updateToneButtonState();
     };
 
     control.onDisconnect = () => {
         state.links.control = false;
+        releasePttLocal("socket disconnected");
         updateConnectionStatus();
     };
 
     control.onRadioState = (radioState) => {
         state.radioConnected = radioState === "connected";
+        if (radioState !== "connected") {
+            releasePttLocal("radio disconnected");
+        }
         updateConnectionStatus();
+        updateToneButtonState();
     };
 
     let _lcdTimer = null;
@@ -186,8 +267,20 @@ async function init() {
     };
     
     control.onPttStatus = (active, holder, error, user) => {
-        const isMe = active && user === window.CURRENT_USER?.name;
+        if (error) {
+            _localPttDown = false;
+            state.pttHolderIsMe = false;
+            state.remotePttUser = null;
+            updateToneButtonState();
+            return;
+        }
+        const isMe = isPttMine(active, holder, user);
+        if (!active && !_localPttDown) {
+            txAudio.stopTransmit();
+        }
         state.pttActive = active;
+        state.pttHolderIsMe = isMe;
+        state.remotePttUser = (active && user && !isMe) ? user : null;
         if (active) {
             pttBtn.classList.add("active");
             smeter.isTX = true;
@@ -196,7 +289,10 @@ async function init() {
             smeter.targetAngle = 0;
             smeter.animate('tx');
             if (isMe) {
-                rxAudio.muted = true;  // only sender mutes own RX (echo suppression)
+                rxAudio.muted = true;
+                if (!_localPttDown && !txAudio.transmitting) {
+                    txAudio.startTransmit();
+                }
             }
             if (user && !isMe) {
                 pttNetStatus.textContent = "📡 " + user + " sendet...";
@@ -207,6 +303,14 @@ async function init() {
             rxAudio.muted = false;
             pttNetStatus.textContent = "";
         }
+        updateToneButtonState();
+    };
+
+    control.onTone1750Status = (ok, error) => {
+        if (!ok) {
+            console.warn("[1750] tone failed:", error || "unknown");
+        }
+        finishTone1750();
     };
 
     rxAudio.onConnectionChange = (connected) => {
@@ -221,6 +325,13 @@ async function init() {
     control.connect();
     setupButtons();
     setupPTT();
+    setupTone1750();
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") {
+            releasePttLocal("tab hidden");
+        }
+    });
+    window.addEventListener("pagehide", () => releasePttLocal("page hide"));
     setupAudioToggle();
     startAudio();
 
@@ -251,11 +362,16 @@ function setupButtons() {
 function setupPTT() {
     pttBtn.addEventListener("pointerdown", (e) => {
         e.preventDefault();
+        _localPttDown = true;
+        state.pttHolderIsMe = true;
+        updateToneButtonState();
         rxAudio.muted = true;  // mute immediately to prevent self-echo
         control.pttOn();
         txAudio.startTransmit();
     });
     const release = () => {
+        _localPttDown = false;
+        updateToneButtonState();
         if (state.pttActive) {
             control.pttOff();
         }
@@ -264,6 +380,24 @@ function setupPTT() {
     pttBtn.addEventListener("pointerup", release);
     pttBtn.addEventListener("pointerleave", release);
     pttBtn.addEventListener("pointercancel", release);
+}
+
+function setupTone1750() {
+    if (!tone1750Btn) return;
+    tone1750Btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        sendTone1750();
+    });
+    document.addEventListener("keydown", (e) => {
+        if (e.repeat) return;
+        if (e.key !== "t" && e.key !== "T") return;
+        const tag = (e.target && e.target.tagName) || "";
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        if (tone1750Btn.disabled) return;
+        e.preventDefault();
+        sendTone1750();
+    });
+    updateToneButtonState();
 }
 
 async function startAudio() {

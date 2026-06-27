@@ -100,6 +100,27 @@ if [[ "$(id -u)" -eq 0 ]]; then
             usermod -aG "$grp" "$SERVICE_USER" 2>/dev/null || true
         fi
     done
+
+    # DS18B20 needs kernel 1-Wire on GPIO 4 (device-tree overlay, not gpiozero)
+    _boot_cfg=""
+    if [[ -f /boot/firmware/config.txt ]]; then
+        _boot_cfg="/boot/firmware/config.txt"
+    elif [[ -f /boot/config.txt ]]; then
+        _boot_cfg="/boot/config.txt"
+    fi
+    if [[ -n "$_boot_cfg" ]]; then
+        if grep -qE '^dtoverlay=w1-gpio' "$_boot_cfg"; then
+            log "1-Wire overlay already present in $_boot_cfg"
+        else
+            log "Adding DS18B20 1-Wire overlay to $_boot_cfg (GPIO 4)"
+            {
+                echo ""
+                echo "# Q-Remote V3: DS18B20 temperature sensor"
+                echo "dtoverlay=w1-gpio,gpiopin=4"
+            } >> "$_boot_cfg"
+            log "Reboot once after install so 1-Wire (/sys/bus/w1) is available"
+        fi
+    fi
 else
     log "Skipping apt (not root). Ensure these are installed: ${APT_PACKAGES[*]}"
 fi

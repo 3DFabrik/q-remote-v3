@@ -35,6 +35,5 @@ Zusätzliche Sicherheits-Flags zur Absicherung des Remote-Shacks:
 - **Fail-Safe-Initialisierung:** Das Backend erzwingt bei jedem Service-Start, System-Reboot oder unvorhergesehenen Software-Crash (via GPIO-Cleanup-Routinen) die sofortige und strikte Rücksetzung aller deklarierten Pins in den sicheren Ruhezustand (`OFF`).
 
 ---
-> **Status:** Spezifikation – freigegeben zur Implementierung (Backend).
 > **Frontend:** Tab im Setup-Menü – folgt später.
 > **Erstellt:** 2026-06-24

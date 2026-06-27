@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Q-Remote V3</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=5.8">
 </head>
 <body>
     <div id="app">
@@ -61,32 +61,34 @@
             </div>
         </div>
 
-        <!-- S-Meter + PTT Panel -->
-        <div class="instrument-panel">
+        <!-- S-Meter + PTT Panel (GPIO strip under S-meter) -->
+        <div class="instrument-panel smeter-panel">
             <div class="panel-label">Signal Strength — S-Meter</div>
             <div id="smeter-ptt-row">
-                <div id="smeter">
-                    <canvas id="smeter-canvas" width="260" height="80"></canvas>
+                <div id="smeter-column">
+                    <div id="smeter">
+                        <canvas id="smeter-canvas" width="260" height="80"></canvas>
+                    </div>
+                    <div id="gpio-strip" class="gpio-strip" style="display:none;">
+                        <div class="gpio-strip-inner">
+                            <button id="gpio-btn-1" class="gpio-toggle-btn" style="display:none;" onclick="toggleGpioBtn('button1')">
+                                <span class="gpio-btn-label"></span>
+                            </button>
+                            <button id="gpio-btn-2" class="gpio-toggle-btn" style="display:none;" onclick="toggleGpioBtn('button2')">
+                                <span class="gpio-btn-label"></span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <div id="ptt-column">
-                    <button id="ptt-btn" class="ptt-button">PTT</button>
+                    <div id="ptt-row" class="ptt-row">
+                        <button id="tone-1750-btn" class="tone-1750-button" type="button" title="1750 Hz Repeater-Ton (einzeln antippen)" disabled>1750</button>
+                        <button id="ptt-btn" class="ptt-button" type="button">PTT</button>
+                    </div>
                     <div class="engraved">Push to Talk</div>
+                    <div id="gpio-temp-display" class="gpio-temp-display"></div>
                     <div id="ptt-net-status" class="ptt-net-status"></div>
                 </div>
-            </div>
-        </div>
-
-        <!-- GPIO Button Bar -->
-        <div id="gpio-bar" class="instrument-panel gpio-bar" style="display:none;">
-            <div class="panel-label">Auxiliary Controls</div>
-            <div class="gpio-bar-inner">
-                <button id="gpio-btn-1" class="gpio-toggle-btn" style="display:none;" onclick="toggleGpioBtn('button1')">
-                <span class="gpio-btn-label"></span>
-            </button>
-            <button id="gpio-btn-2" class="gpio-toggle-btn" style="display:none;" onclick="toggleGpioBtn('button2')">
-                <span class="gpio-btn-label"></span>
-            </button>
-            <div id="gpio-temp-display" class="gpio-temp-display"></div>
             </div>
         </div>
 
@@ -121,7 +123,7 @@
         </div>
     </div>
 
-    <script type="module" src="/static/js/app.js?v=4.2"></script>
+    <script type="module" src="/static/js/app.js?v=4.6"></script>
 
 
 <script>
@@ -136,7 +138,6 @@
 </script>
 <script>
     // ─── GPIO Button Bar ─────────────────────────────
-    var _gpioBarHasTemps = false;
 
     function countVisibleGpioButtons() {
         let visible = 0;
@@ -147,10 +148,10 @@
         return visible;
     }
 
-    function updateGpioBarVisibility(visibleButtons) {
-        const bar = document.getElementById('gpio-bar');
+    function updateGpioStripVisibility(visibleButtons) {
+        const strip = document.getElementById('gpio-strip');
         const buttons = visibleButtons !== undefined ? visibleButtons : countVisibleGpioButtons();
-        bar.style.display = (buttons > 0 || _gpioBarHasTemps) ? 'block' : 'none';
+        strip.style.display = buttons > 0 ? 'flex' : 'none';
     }
 
     async function loadGpioButtons() {
@@ -174,7 +175,7 @@
                 }
             }
 
-            updateGpioBarVisibility(visible);
+            updateGpioStripVisibility(visible);
         } catch(e) {
             console.warn('GPIO buttons load failed:', e);
         }
@@ -207,6 +208,40 @@
     // --- Temperature Display (auto, polls every 5s) ---
     var _tempPollTimer = null;
 
+    function escHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    /** Fixed XX.X for Nixie window (2 digits + dot + 1 digit). */
+    function formatNixieTemp(celsius) {
+        if (celsius === null || celsius === undefined || Number.isNaN(celsius)) {
+            return '\u2014.\u2010';
+        }
+        var sign = celsius < 0 ? '-' : '';
+        var abs = Math.abs(celsius);
+        var parts = abs.toFixed(1).split('.');
+        var intPart = parts[0].padStart(2, '0');
+        return sign + intPart + '.' + parts[1];
+    }
+
+    function renderTempModule(sensor) {
+        var label = escHtml(sensor.name || 'TEMP');
+        var digits = formatNixieTemp(sensor.temp);
+        var errClass = (sensor.temp === null || sensor.temp === undefined) ? ' gpio-temp-nixie-off' : '';
+        return (
+            '<div class="gpio-temp-module">' +
+                '<div class="gpio-temp-engraved">' + label + '</div>' +
+                '<div class="gpio-temp-nixie-bezel">' +
+                    '<span class="gpio-temp-nixie-digits' + errClass + '">' + digits + '</span>' +
+                '</div>' +
+            '</div>'
+        );
+    }
+
     async function loadTemperatures() {
         try {
             var resp = await fetch('/api/gpio/temperatures');
@@ -221,21 +256,11 @@
                 display.style.display = 'none';
                 if (_tempPollTimer) { clearInterval(_tempPollTimer); _tempPollTimer = null; }
                 display.innerHTML = '';
-                updateGpioBarVisibility();
                 return;
             }
 
             display.style.display = 'flex';
-            var html = sensors.map(function(s) {
-                if (s.temp !== null && s.temp !== undefined) {
-                    return '<span class="gpio-temp-item">' + s.name + ': ' + s.temp.toFixed(1) + '\u00B0C</span>';
-                } else {
-                    // Show clean "—.-°C" format when temperature not available
-                    return '<span class="gpio-temp-item gpio-temp-error">' + s.name + ': \u2014.\u2010\u00B0C</span>';
-                }
-            }).join('');
-            display.innerHTML = html;
-            updateGpioBarVisibility();
+            display.innerHTML = sensors.map(renderTempModule).join('');
         } catch(e) {
             console.warn('Temperature load failed:', e);
         }
@@ -261,7 +286,7 @@
                 btn.style.display = 'none';
             }
         }
-        updateGpioBarVisibility(visible);
+        updateGpioStripVisibility(visible);
     }
     </script>
 

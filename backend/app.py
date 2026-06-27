@@ -75,6 +75,37 @@ async def _gpio_session_watchdog_loop():
             logger.error(f"GPIO session watchdog error: {e}", exc_info=True)
 
 
+async def _radio_reconnect_loop():
+    """Try to reopen the radio serial link when the USB device returns."""
+    delay = float(get("radio.reconnect_delay", 3.0))
+    logger.info(f"Radio reconnect watcher started (every {delay}s)")
+    while True:
+        try:
+            await asyncio.sleep(delay)
+            r = _sio_mod.radio
+            if not r or r.connected:
+                continue
+            device = Path(get("radio.device", "/dev/ttyACM0"))
+            if not device.exists():
+                continue
+            logger.info("Radio device %s is back — reconnecting", device)
+            if r.reconnect():
+                logger.info("Radio reconnected")
+                await _sio_mod.sio.emit("radio_state", {"state": "connected"})
+                loop = asyncio.get_event_loop()
+                if not rx_audio._running:
+                    rx_audio.start(loop)
+                tx_audio.start()
+                tx_audio.set_relay_targets(rx_audio._clients)
+            else:
+                logger.warning("Radio reconnect failed")
+        except asyncio.CancelledError:
+            logger.info("Radio reconnect watcher stopped")
+            raise
+        except Exception as e:
+            logger.error(f"Radio reconnect watcher error: {e}", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_config()
@@ -105,8 +136,15 @@ async def lifespan(app: FastAPI):
         logger.warning(f"GPIO init failed (non-Pi or no gpiozero?): {e}")
 
     watchdog_task = asyncio.create_task(_gpio_session_watchdog_loop())
+    radio_reconnect_task = asyncio.create_task(_radio_reconnect_loop())
 
     yield
+
+    radio_reconnect_task.cancel()
+    try:
+        await radio_reconnect_task
+    except asyncio.CancelledError:
+        pass
 
     watchdog_task.cancel()
     try:

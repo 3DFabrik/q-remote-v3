@@ -226,6 +226,14 @@ class GPIOManager:
             # Input pins (e.g. DS18B20 on 1-Wire) are sysfs-only — never gpiozero
             if cfg.direction == "input":
                 if cfg.input_type == "ds18b20":
+                    w1_base = Path("/sys/bus/w1")
+                    if not w1_base.exists():
+                        logger.warning(
+                            "DS18B20 configured on GPIO %s but 1-Wire is not enabled "
+                            "(missing /sys/bus/w1). Add "
+                            "'dtoverlay=w1-gpio,gpiopin=4' to boot config and reboot.",
+                            cfg.bcm_pin,
+                        )
                     logger.info(
                         f"GPIO {cfg.bcm_pin} input: DS18B20 "
                         f"'{cfg.sensor_name or '(unnamed)'}' (1-Wire, no gpiozero)"
@@ -616,6 +624,18 @@ class GPIOManager:
                     "active": self._button_states["button2"],
                     "session_bound": cfg.session_bound,
                 }
+            elif (
+                cfg.trigger == TRIGGER_PTT
+                and cfg.ptt_combo_button in ("button1", "button2")
+                and cfg.button_label
+            ):
+                bid = cfg.ptt_combo_button
+                if bid not in info:
+                    info[bid] = {
+                        "label": cfg.button_label,
+                        "active": self._button_states[bid],
+                        "session_bound": cfg.session_bound,
+                    }
         return info
 
     # --- Temperature Sensors (DS18B20) ---
@@ -695,6 +715,27 @@ class GPIOManager:
             results.append(entry)
 
         return results
+
+    def get_sensor_temp(self, sensor_name: str) -> float | None:
+        """Read one DS18B20 sensor by configured sensor_name."""
+        if not sensor_name:
+            return None
+        cfg = None
+        for c in self._configs:
+            if c.input_type == "ds18b20" and c.sensor_name == sensor_name:
+                cfg = c
+                break
+        if not cfg:
+            return None
+        w1_base = Path("/sys/bus/w1/devices")
+        sensor_id = self._resolve_ds18b20_sensor_id(cfg, w1_base)
+        if not sensor_id:
+            return None
+        try:
+            return self._read_sensor_temp(sensor_id, w1_base)
+        except Exception as e:
+            logger.debug("get_sensor_temp(%s): %s", sensor_name, e)
+            return None
 
     @property
     def initialized(self) -> bool:
