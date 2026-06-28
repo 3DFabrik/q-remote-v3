@@ -1,10 +1,12 @@
 # Q-Remote V3 🤖📻
 
-Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmware. Access your radio from anywhere through the browser – live display, complete control, GPIO peripherals, and a full channel editor.
+Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmware. Access your radio from anywhere through the browser – live CRT display, complete control, GPIO peripherals, and a full channel editor. The main UI is styled as a vintage equipment chassis with backlit keys and a CRT-style display panel.
 
 > **Special thanks to [Nic Sure](https://github.com/nicsure) for the amazing [QuanshengDock](https://github.com/nicsure/QuanshengDock) project – the firmware, protocol documentation, and C# reference implementation that made Q-Remote V3 possible. Without this foundational work, none of this would exist. 🙏
 
-![Q-Remote V3 Screenshot](docs/screenshot.jpg)
+![Q-Remote V3 – main control panel with CRT display, S-meter, and transmitter keypad](docs/screenshot.jpg)
+
+*Equipment chassis UI: CRT display with phosphor warm-up, analog S-meter, 1750 Hz tone, PTT, and full UV-K5 keypad.*
 
 *Login panel:*
 
@@ -27,14 +29,16 @@ Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmwa
 ### ✅ Working
 
 **Radio Control**
-- **Live CRT Display** – Radio LCD rendered in real-time on HTML5 Canvas with anti-flicker
+- **Live CRT Display** – Radio LCD rendered in real-time on HTML5 Canvas with anti-flicker and phosphor warm-up after login
+- **Equipment Chassis UI** – Retro rack-style control panel with CRT bezel, module bays, and backlit keypad buttons
 - **RX Audio** – Listen to incoming radio audio in your browser (μ-law codec, 8 kHz)
 - **TX Audio** – Transmit through your browser's microphone (μ-law, click-free)
 - **Full Button Control** – 4×4 button grid matching the UV-K5 layout with correct labels
 - **PTT (Push-to-Talk)** – Hold to transmit, with TX lock for multi-user safety
+- **1750 Hz Tone** – One-touch tone burst for repeater access
 - **Analog S-Meter** – Real-time signal strength needle with continuous dBm mapping
 - **Mic Modulation Meter** – dBFS level display during transmit (MOD scale)
-- **Squelch Control** – Adjustable squelch threshold with audio gating (admin panel)
+- **RX Squelch** – Configurable threshold with RSSI/audio gating, hold time, and attack/release envelope (admin panel)
 - **Connection LEDs** – Header indicators for Socket.IO (IO), RX audio, and TX audio WebSockets
 
 **Stations Editor**
