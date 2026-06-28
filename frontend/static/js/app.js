@@ -4,7 +4,7 @@
 
 import { control } from "./control.js?v=4.7";
 import { DisplayRenderer } from "./display.js?v=1.2";
-import { AnalogSMeter } from "./smeter.js?v=1.1";
+import { AnalogSMeter } from "./smeter.js?v=1.2";
 import { RxAudio } from "./audio.js";
 import { TxAudio } from "./tx_audio.js";
 
@@ -27,6 +27,7 @@ const lcdCanvas = document.getElementById("lcd");
 const pttNetStatus = document.getElementById("ptt-net-status");
 
 let _localPttDown = false;
+let _pttOnSent = false;
 let _tone1750Cooldown = false;
 let _tone1750CooldownTimer = null;
 
@@ -86,6 +87,8 @@ const display = new DisplayRenderer(lcdCanvas);
 const smeter = new AnalogSMeter(smeterCanvas);
 const rxAudio = new RxAudio();
 const txAudio = new TxAudio();
+let _lastSmeterAt = 0;
+let _lastRxSmeter = 0;
 
 // Wire up mic level to S-meter during TX
 txAudio.onMicLevel = (rms) => {
@@ -194,8 +197,9 @@ function releasePttLocal(reason) {
     state.pttHolderIsMe = false;
     state.remotePttUser = null;
     _localPttDown = false;
+    _pttOnSent = false;
     pttBtn.classList.remove("active");
-    smeter.isTX = false;
+    smeter.leaveTX(0);
     pttNetStatus.textContent = "";
     updateToneButtonState();
 }
@@ -237,28 +241,23 @@ async function init() {
     let _lcdTimer = null;
     let _pendingLcd = null;
     control.onDisplayUpdate = (lcdState) => {
+        if (lcdState.rssi_hw) {
+            if (typeof lcdState.rssi_s_raw === "number" && !smeter.isTX) {
+                _lastSmeterAt = Date.now();
+                _lastRxSmeter = lcdState.rssi_s_raw;
+                smeter.updateRX(lcdState.rssi_s_raw);
+            }
+            return;
+        }
         _pendingLcd = lcdState;
         if (_lcdTimer) clearTimeout(_lcdTimer);
         _lcdTimer = setTimeout(() => {
             if (_pendingLcd) {
                 display.processEvent(_pendingLcd);
-                if (typeof _pendingLcd.rssi_dbm === "number" && !smeter.isTX) {
-                    smeter.updateRX(dbmToSraw(_pendingLcd.rssi_dbm));
-                }
                 _pendingLcd = null;
             }
         }, 50);
     };
-
-    function dbmToSraw(dbm) {
-        // Below -120 dBm: needle at rest (no S reading on meter)
-        if (dbm <= -120) return 0;
-        if (dbm >= -13) return 15;
-        if (dbm <= -73) {
-            return 1 + (dbm - (-121)) / 6;
-        }
-        return 9 + (-73 - dbm) / (-10);
-    }
 
     control.onGpioButtons = function(buttons) {
         if (typeof updateGpioButtons === 'function') updateGpioButtons(buttons);
@@ -297,7 +296,7 @@ async function init() {
             }
         } else {
             pttBtn.classList.remove("active");
-            smeter.setRX(0);
+            smeter.leaveTX(0);
             rxAudio.muted = false;
             pttNetStatus.textContent = "";
         }
@@ -332,6 +331,12 @@ async function init() {
     window.addEventListener("pagehide", () => releasePttLocal("page hide"));
     setupAudioToggle();
     startAudio();
+    setInterval(() => {
+        if (smeter.isTX || !_lastSmeterAt) return;
+        if (Date.now() - _lastSmeterAt > 1500) {
+            smeter.updateRX(0);
+        }
+    }, 500);
 
     // Session management
     setupTabCloseLogout();
@@ -357,27 +362,48 @@ function setupButtons() {
     });
 }
 
+function releasePttButton() {
+    if (!_localPttDown && !_pttOnSent) return;
+    _localPttDown = false;
+    if (_pttOnSent) {
+        control.pttOff();
+        _pttOnSent = false;
+    }
+    txAudio.stopTransmit();
+    pttBtn.classList.remove("active");
+    smeter.leaveTX(0);
+    updateToneButtonState();
+}
+
 function setupPTT() {
     pttBtn.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
         e.preventDefault();
+        try {
+            pttBtn.setPointerCapture(e.pointerId);
+        } catch (_) { /* ignore */ }
         _localPttDown = true;
+        _pttOnSent = true;
         state.pttHolderIsMe = true;
         updateToneButtonState();
-        rxAudio.muted = true;  // mute immediately to prevent self-echo
+        rxAudio.muted = true;
         control.pttOn();
         txAudio.startTransmit();
     });
-    const release = () => {
-        _localPttDown = false;
-        updateToneButtonState();
-        if (state.pttActive) {
-            control.pttOff();
+    pttBtn.addEventListener("pointerup", (e) => {
+        try {
+            if (pttBtn.hasPointerCapture(e.pointerId)) {
+                pttBtn.releasePointerCapture(e.pointerId);
+            }
+        } catch (_) { /* ignore */ }
+        releasePttButton();
+    });
+    pttBtn.addEventListener("pointercancel", releasePttButton);
+    document.addEventListener("pointerup", () => {
+        if (_localPttDown || _pttOnSent) {
+            releasePttButton();
         }
-        txAudio.stopTransmit();
-    };
-    pttBtn.addEventListener("pointerup", release);
-    pttBtn.addEventListener("pointerleave", release);
-    pttBtn.addEventListener("pointercancel", release);
+    });
 }
 
 function setupTone1750() {
@@ -408,6 +434,7 @@ async function startAudio() {
 }
 
 function stopAudio() {
+    releasePttLocal("audio off");
     audioBtn.classList.remove("active");
     audioIcon.textContent = "\u{1F507}";
     audioActive = false;

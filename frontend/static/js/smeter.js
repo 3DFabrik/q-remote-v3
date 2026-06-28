@@ -80,6 +80,14 @@ export class AnalogSMeter {
         this.animate('rx');
     }
 
+    /** Leave TX/modulation mode immediately after PTT release. */
+    leaveTX(sRaw = 0) {
+        this.isTX = false;
+        this.txGlowTarget = 0;
+        this.txGlow = 0;
+        this.setRX(sRaw);
+    }
+
     animate(mode) {
         // Always update target; if animation is running it will pick up the new value
         if (this.decayTimer) return;

@@ -49,13 +49,10 @@ tx_audio = TxPipeline()
 
 def apply_squelch_config() -> None:
     """Load RX squelch settings from config into the live pipeline."""
-    rx_audio.squelch_enabled = bool(get("audio.squelch_enabled", True))
-    rx_audio.squelch_threshold = int(get("audio.squelch_threshold", 300))
-    rx_audio.signal_threshold_dbm = int(get("audio.squelch_signal_dbm", -115))
-    rx_audio.gate_hold_ms = int(get("audio.squelch_gate_hold_ms", 200))
+    rx_audio.squelch_enabled = bool(get("audio.squelch_enabled", False))
+    rx_audio.gate_hold_ms = int(get("audio.squelch_gate_hold_ms", 1000))
     rx_audio.gate_attack_ms = int(get("audio.squelch_gate_attack_ms", 35))
     rx_audio.gate_release_ms = int(get("audio.squelch_gate_release_ms", 25))
-    rx_audio.signal_stale_s = float(get("audio.squelch_signal_stale_s", 0.5))
 
 jinja_env = Environment(
     loader=FileSystemLoader(str(TEMPLATES_DIR)),
@@ -124,7 +121,7 @@ async def lifespan(app: FastAPI):
     load_users()
     logger.info("Q-Remote V3 starting up")
 
-    r = init_radio()
+    r = init_radio(rx_audio)
     connected = r.connect()
     if connected:
         logger.info("Radio connected")
@@ -132,12 +129,11 @@ async def lifespan(app: FastAPI):
         try:
             apply_squelch_config()
             logger.info(
-                "Squelch: enabled=%s rms=%s signal_dbm=%s hold_ms=%s stale_s=%s",
+                "Squelch: enabled=%s hold_ms=%s attack_ms=%s release_ms=%s (BK4819 chip)",
                 rx_audio.squelch_enabled,
-                rx_audio.squelch_threshold,
-                rx_audio.signal_threshold_dbm,
                 rx_audio.gate_hold_ms,
-                rx_audio.signal_stale_s,
+                rx_audio.gate_attack_ms,
+                rx_audio.gate_release_ms,
             )
         except Exception as e:
             logger.warning(f"Could not load squelch config: {e}")
@@ -322,12 +318,9 @@ async def admin_page(request: Request, _=Depends(admin_required)):
     return HTMLResponse(jinja_env.get_template("admin.html").render(
         request=request, users=USERS, current_user=get_current_user(request),
         squelch_enabled=rx_audio.squelch_enabled,
-        squelch_threshold=rx_audio.squelch_threshold,
-        squelch_signal_dbm=rx_audio.signal_threshold_dbm,
         squelch_gate_hold_ms=rx_audio.gate_hold_ms,
         squelch_gate_attack_ms=rx_audio.gate_attack_ms,
         squelch_gate_release_ms=rx_audio.gate_release_ms,
-        squelch_signal_stale_s=rx_audio.signal_stale_s,
     ))
 
 
@@ -466,12 +459,9 @@ async def audio_tx_ws(websocket: WebSocket):
 async def get_squelch(request: Request, _=Depends(admin_required)):
     return {
         "enabled": rx_audio.squelch_enabled,
-        "threshold": rx_audio.squelch_threshold,
-        "signal_dbm": rx_audio.signal_threshold_dbm,
         "gate_hold_ms": rx_audio.gate_hold_ms,
         "gate_attack_ms": rx_audio.gate_attack_ms,
         "gate_release_ms": rx_audio.gate_release_ms,
-        "signal_stale_s": rx_audio.signal_stale_s,
     }
 
 
@@ -480,20 +470,14 @@ async def set_squelch(request: Request, _=Depends(admin_required)):
     import yaml
     form = await request.form()
     enabled = form.get("squelch_enabled") == "on"
-    threshold = max(50, min(5000, int(form.get("squelch_threshold", "300"))))
-    signal_dbm = max(-130, min(-40, int(form.get("squelch_signal_dbm", "-115"))))
-    gate_hold_ms = max(50, min(1000, int(form.get("squelch_gate_hold_ms", "200"))))
+    gate_hold_ms = max(50, min(3000, int(form.get("squelch_gate_hold_ms", "1000"))))
     gate_attack_ms = max(5, min(500, int(form.get("squelch_gate_attack_ms", "35"))))
     gate_release_ms = max(5, min(500, int(form.get("squelch_gate_release_ms", "25"))))
-    signal_stale_s = max(0.2, min(2.0, float(form.get("squelch_signal_stale_s", "0.5"))))
 
     rx_audio.squelch_enabled = enabled
-    rx_audio.squelch_threshold = threshold
-    rx_audio.signal_threshold_dbm = signal_dbm
     rx_audio.gate_hold_ms = gate_hold_ms
     rx_audio.gate_attack_ms = gate_attack_ms
     rx_audio.gate_release_ms = gate_release_ms
-    rx_audio.signal_stale_s = signal_stale_s
 
     cfg_path = Path(__file__).parent.parent / "config.local.yaml"
     cfg = {}
@@ -501,20 +485,16 @@ async def set_squelch(request: Request, _=Depends(admin_required)):
         cfg = yaml.safe_load(cfg_path.read_text()) or {}
     audio = cfg.setdefault("audio", {})
     audio["squelch_enabled"] = enabled
-    audio["squelch_threshold"] = threshold
-    audio["squelch_signal_dbm"] = signal_dbm
     audio["squelch_gate_hold_ms"] = gate_hold_ms
     audio["squelch_gate_attack_ms"] = gate_attack_ms
     audio["squelch_gate_release_ms"] = gate_release_ms
-    audio["squelch_signal_stale_s"] = signal_stale_s
     cfg_path.write_text(yaml.dump(cfg, default_flow_style=False))
 
     log_activity(
         get_current_user(request),
         "SQUELCH",
-        f"enabled={enabled} rms={threshold} signal_dbm={signal_dbm} "
-        f"hold_ms={gate_hold_ms} attack_ms={gate_attack_ms} release_ms={gate_release_ms} "
-        f"stale_s={signal_stale_s}",
+        f"enabled={enabled} hold_ms={gate_hold_ms} "
+        f"attack_ms={gate_attack_ms} release_ms={gate_release_ms}",
     )
     return RedirectResponse(url="/admin", status_code=303)
 

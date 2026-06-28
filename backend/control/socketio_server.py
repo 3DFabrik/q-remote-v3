@@ -11,6 +11,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 import socketio
 
+from backend.audio.rx_pipeline import RxPipeline
 from backend.radio.connection import RadioConnection
 from backend.radio.protocol import Packet
 from backend.radio.lcd import LCDDisplay
@@ -33,21 +34,9 @@ _sid_users: dict = {}  # sid -> username
 _ptt_drain_task: Optional[asyncio.Task] = None
 _tone_1750_busy = False
 _PTT_DRAIN_DELAY = 0.8
-
-_rssi_raw_history = []
-_RSSI_HISTORY_LEN = 10
-
-
-def _feed_rx_squelch_from_lcd() -> None:
-    """Push current LCD RSSI into the RX noise gate (same logic as S-meter)."""
-    if not lcd:
-        return
-    lcd.check_rssi_timeout()
-    try:
-        from backend.app import rx_audio
-        rx_audio.update_signal_dbm(lcd.rssi)
-    except Exception as exc:
-        logger.debug("RX squelch RSSI feed failed: %s", exc)
+_pending_ptt_cancel: set[str] = set()
+_last_firmware_smeter_at: float = 0.0
+_FIRMWARE_SMETER_TTL = 0.5  # prefer firmware UI type 8 when recent
 
 
 def _get_user_from_environ(environ: dict) -> Optional[str]:
@@ -69,10 +58,11 @@ def _get_user_from_environ(environ: dict) -> Optional[str]:
     return None
 
 
-def init_radio():
-    global radio, lcd
+def init_radio(rx_audio: Optional[RxPipeline] = None):
+    global radio, lcd, _last_firmware_smeter_at
     radio = RadioConnection()
     lcd = LCDDisplay()
+    _last_firmware_smeter_at = 0.0
 
     def on_lcd_change(state):
         logger.info(f"LCD change callback fired!")
@@ -86,15 +76,27 @@ def init_radio():
     lcd.on_change(on_lcd_change)
 
     async def handle_ui(ui_type, val1, val2, val3, data_len, data):
-        prev_rssi = lcd.rssi
+        prev_meter = lcd.meter_s_raw
         lcd.process_ui_packet(ui_type, val1, val2, val3, data_len, data)
-        rssi_timed_out = lcd.check_rssi_timeout()
-        _feed_rx_squelch_from_lcd()
-        if ui_type == 6 or rssi_timed_out or lcd.rssi != prev_rssi:
+        freq = lcd.parse_active_vfo_frequency_mhz()
+        if freq is not None:
+            radio.set_rx_band_from_mhz(freq)
+        if ui_type == 8:
+            _last_firmware_smeter_at = time.monotonic()
+            await _emit_smeter(lcd.meter_s_raw)
+        elif lcd.meter_s_raw != prev_meter:
+            _last_firmware_smeter_at = time.monotonic()
+            await _emit_smeter(lcd.meter_s_raw)
+        elif ui_type == 6:
             lcd.flush()
 
+    async def on_hw_rssi(dbm: int, raw: int, s_raw: float, squelch_open: bool):
+        if rx_audio is not None:
+            rx_audio.update_squelch_open(squelch_open)
+        # S-meter: firmware UI type 8 / CRT text only — no raw BK4819 fallback
+
     radio.on_ui = handle_ui
-    radio.on_rssi = _on_rssi
+    radio.on_rssi_update = on_hw_rssi
     radio.on_register = _on_register
     radio.on_connect = _on_radio_connect
     radio.on_disconnect = _on_radio_disconnect
@@ -108,24 +110,20 @@ def get_sio_app():
 
 # ─── Emit helpers ─────────────────────────────────────────────────
 
+async def _emit_smeter(s_raw: float) -> None:
+    await sio.emit('lcd_update', {
+        'rssi_s_raw': s_raw,
+        'rssi_hw': True,
+    })
+
+
 async def _emit_lcd(state):
     await sio.emit('lcd_update', state)
 
 
-async def _on_rssi(raw_data):
-    pass
-
-
-def _raw_to_s_raw(rssi_raw):
-    if rssi_raw <= 122: return 0
-    elif rssi_raw < 170:
-        return min(9, 1 + int((rssi_raw - 122) / 5.3))
-    elif rssi_raw < 191: return 10
-    elif rssi_raw < 212: return 11
-    elif rssi_raw < 233: return 12
-    elif rssi_raw < 254: return 13
-    elif rssi_raw < 275: return 14
-    else: return 15
+async def _expire_ptt_cancel(sid: str) -> None:
+    await asyncio.sleep(1.0)
+    _pending_ptt_cancel.discard(sid)
 
 
 async def _on_register(reg, val):
@@ -205,7 +203,7 @@ async def key_press(sid, data):
 
 @sio.event
 async def ptt_on(sid, data=None):
-    global _ptt_owner, _ptt_drain_task
+    global _ptt_owner, _ptt_drain_task, _pending_ptt_cancel
     user = _sid_users.get(sid)
     if not user:
         return
@@ -213,6 +211,11 @@ async def ptt_on(sid, data=None):
         await sio.disconnect(sid)
         return
     touch_activity(user)
+
+    if sid in _pending_ptt_cancel:
+        _pending_ptt_cancel.discard(sid)
+        logger.info("PTT ON ignored — client already released (sid=%s)", sid)
+        return
 
     if not radio or not radio.connected:
         return
@@ -296,9 +299,25 @@ async def tone_1750(sid, data=None):
 
 @sio.event
 async def ptt_off(sid, data=None):
-    global _ptt_owner, _ptt_drain_task
-    if _ptt_owner != sid:
+    global _ptt_owner, _ptt_drain_task, _pending_ptt_cancel
+    user = _sid_users.get(sid)
+
+    if _ptt_owner is None:
+        _pending_ptt_cancel.add(sid)
+        asyncio.create_task(_expire_ptt_cancel(sid))
+        if radio and radio.connected:
+            radio.send_key(13)
+        logger.info("PTT OFF early — cancel pending ON (sid=%s)", sid)
         return
+
+    if _ptt_owner != sid:
+        owner_user = _sid_users.get(_ptt_owner)
+        if not user or owner_user != user:
+            return
+        _ptt_owner = sid
+
+    if _ptt_drain_task and not _ptt_drain_task.done():
+        _ptt_drain_task.cancel()
     _ptt_drain_task = asyncio.create_task(_drain_and_release(sid))
     logger.info(f"PTT UP – drain started (sid={sid})")
 

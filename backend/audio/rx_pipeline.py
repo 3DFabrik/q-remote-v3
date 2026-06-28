@@ -2,13 +2,11 @@
 
 Captures 8kHz 16-bit PCM from AIOC, encodes to G.711 ulaw,
 sends to WebSocket clients. 20ms chunks for low latency.
-No audioop dependency - uses builtin ulaw table.
+Noise gate follows BK4819 squelch (reg 0x02), not audio RMS.
 """
 
 import asyncio
 import logging
-import math
-import struct
 import subprocess
 import threading
 import time
@@ -100,19 +98,25 @@ class RxPipeline:
         self._thread = None
         self._clients: Set = set()
         self._loop = None
-        # Noise gate (squelch) — opens on audio RMS and/or S-meter signal (RSSI)
-        self.squelch_enabled = True
-        self.squelch_threshold = 300  # RMS threshold (0-32768), ~-40dB
-        self.signal_threshold_dbm = -115  # RSSI above this opens gate (S-meter)
-        self.signal_stale_s = 0.5  # RSSI considered stale after this silence
-        self.gate_hold_ms = 200  # keep gate open after signal/audio drops
-        self.gate_attack_ms = 35  # fade-in when opening (reduces punch/click)
-        self.gate_release_ms = 25  # fade-out when closing
-        self._signal_lock = threading.Lock()
-        self._signal_dbm = -120
-        self._signal_updated_at = 0.0
+        self.squelch_enabled = False
+        self.gate_hold_ms = 1000
+        self.gate_attack_ms = 35
+        self.gate_release_ms = 25
         self._gate_gain = 0.0
         self._gate_hold_frames = 0
+        self._squelch_open = False
+        self._sq_lock = threading.Lock()
+        self._sent_chunks = 0
+
+    def update_squelch_open(self, open_: bool) -> None:
+        with self._sq_lock:
+            if open_ != self._squelch_open:
+                log.info("BK4819 squelch: %s -> %s", self._squelch_open, open_)
+            self._squelch_open = open_
+
+    def _is_squelch_open(self) -> bool:
+        with self._sq_lock:
+            return self._squelch_open
 
     def add_client(self, websocket):
         self._clients.add(websocket)
@@ -122,26 +126,11 @@ class RxPipeline:
         self._clients.discard(websocket)
         log.info(f"RX audio client removed ({len(self._clients)} total)")
 
-    def update_signal_dbm(self, dbm: int) -> None:
-        """Feed RSSI from radio LCD (same source as S-meter). Thread-safe."""
-        with self._signal_lock:
-            self._signal_dbm = int(dbm)
-            self._signal_updated_at = time.monotonic()
-
-    def _signal_present(self) -> bool:
-        with self._signal_lock:
-            if self._signal_updated_at <= 0:
-                return False
-            if time.monotonic() - self._signal_updated_at > self.signal_stale_s:
-                return False
-            return self._signal_dbm > self.signal_threshold_dbm
-
     def _gate_hold_count(self) -> int:
         chunk_ms = (CHUNK_SAMPLES / SAMPLE_RATE) * 1000
         return max(1, round(self.gate_hold_ms / chunk_ms))
 
     def _gate_ramp_step(self, ms: float) -> float:
-        """Per-chunk gain delta for attack/release envelope."""
         chunk_ms = (CHUNK_SAMPLES / SAMPLE_RATE) * 1000
         frames = max(1.0, ms / chunk_ms)
         return 1.0 / frames
@@ -198,8 +187,8 @@ class RxPipeline:
         log.info("RX pipeline stopped")
 
     def _capture_loop(self):
-        log.info("RX capture loop started (ulaw, 20ms)")
-        chunk_count = 0
+        log.info("RX capture loop started (ulaw, BK4819 squelch gate)")
+        capture_count = 0
         last_log = time.time()
 
         while self._running and self._process:
@@ -212,18 +201,12 @@ class RxPipeline:
                     time.sleep(0.01)
                     continue
 
-                chunk_count += 1
+                capture_count += 1
 
-                # Noise gate with soft attack/release (avoids punch on open/close)
                 if self.squelch_enabled:
-                    import array
-                    samples = array.array("h", pcm_data)
-                    rms = math.sqrt(sum(s * s for s in samples) / len(samples))
-                    audio_open = rms > self.squelch_threshold
-                    signal_open = self._signal_present()
+                    chip_open = self._is_squelch_open()
 
-                    # OR gate: open on RF (RSSI) or line audio; hold while either is present
-                    if signal_open or audio_open:
+                    if chip_open:
                         want_open = True
                         self._gate_hold_frames = self._gate_hold_count()
                     elif self._gate_hold_frames > 0:
@@ -234,7 +217,9 @@ class RxPipeline:
 
                     start_gain = self._gate_gain
                     if want_open:
-                        end_gain = min(1.0, start_gain + self._gate_ramp_step(self.gate_attack_ms))
+                        end_gain = min(
+                            1.0, start_gain + self._gate_ramp_step(self.gate_attack_ms)
+                        )
                     else:
                         end_gain = max(0.0, start_gain - self._gate_ramp_step(self.gate_release_ms))
 
@@ -247,15 +232,27 @@ class RxPipeline:
                 ulaw_data = pcm_to_ulaw(pcm_data)
 
                 if self._clients and self._loop:
+                    self._sent_chunks += 1
                     self._loop.call_soon_threadsafe(
                         lambda d=ulaw_data: asyncio.ensure_future(self._broadcast(d))
                     )
 
                 now = time.time()
                 if now - last_log >= 5.0:
-                    rate = chunk_count / (now - last_log)
-                    log.info(f"RX audio: {rate:.1f} ulaw chunks/s, {len(self._clients)} clients")
-                    chunk_count = 0
+                    cap_rate = capture_count / (now - last_log)
+                    sent_rate = self._sent_chunks / (now - last_log)
+                    with self._sq_lock:
+                        sq = self._squelch_open
+                    log.info(
+                        "RX audio: capture=%.1f/s sent=%.1f/s sq=%s hold_fr=%s clients=%s",
+                        cap_rate,
+                        sent_rate,
+                        sq,
+                        self._gate_hold_frames,
+                        len(self._clients),
+                    )
+                    capture_count = 0
+                    self._sent_chunks = 0
                     last_log = now
 
             except Exception as e:

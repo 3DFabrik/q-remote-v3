@@ -14,6 +14,13 @@ from backend.config import get
 from backend.radio.protocol import (
     PacketParser, Packet, build_packet, u16,
 )
+from backend.radio.rssi import (
+    corrected_dbm,
+    mhz_to_band,
+    parse_rssi_info,
+    raw_to_s_raw,
+    squelch_open_from_reg02,
+)
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +43,7 @@ class RadioConnection:
 
         # Callbacks (set by socketio_server.py)
         self.on_ui = None         # async (ui_type, v1, v2, v3, dlen, data)
-        self.on_rssi = None       # async (data)
+        self.on_rssi_update = None  # async (dbm, raw, s_raw, squelch_open)
         self.on_register = None   # async (reg, val)
         self.on_command = None    # async (data)
         self.on_connect = None    # async ()
@@ -44,7 +51,13 @@ class RadioConnection:
 
         # RSSI polling
         self._rssi_thread = None
-        self._rssi_interval = 0.2  # 200ms
+        self._rssi_interval = 0.2  # 200ms — GET_RSSI + reg 0x02 squelch
+        self._rssi_raw = 0
+        self._rssi_dbm = -120
+        self._rssi_s_raw = 0.0
+        self._rx_band = 0
+        self._squelch_open = False
+        self._sq_lock = threading.Lock()
         # Frequency read-on-demand (no continuous polling)
         self._freq_reg38 = None
         self._freq_reg39 = None
@@ -352,15 +365,53 @@ class RadioConnection:
         self.send_command(Packet.RESET, 0x12345678)
         log.info("Radio reset command sent")
 
+    def set_rx_band(self, band: int) -> None:
+        self._rx_band = max(0, min(6, int(band)))
+
+    def set_rx_band_from_mhz(self, mhz: float) -> None:
+        self.set_rx_band(mhz_to_band(mhz))
+
     def _rssi_poll_loop(self):
-        """No-op placeholder – frequency is read on demand via read_frequency()."""
-        log.info("RSSI poll loop idle (no continuous polling)")
+        """Poll BK4819 via GET_RSSI (0x527) and squelch status reg 0x02 (200 ms)."""
+        log.info("RSSI poll loop started (GET_RSSI + BK4819 reg 0x02)")
+        tick = 0
         while self._running and self.connected:
             try:
-                time.sleep(1)
-            except Exception:
-                pass
+                if not self._eeprom_mode:
+                    if tick % 2 == 0:
+                        self.request_rssi()
+                    else:
+                        self.read_register(0x02)
+                tick += 1
+                time.sleep(self._rssi_interval)
+            except Exception as e:
+                if self._running:
+                    log.error(f"RSSI poll error: {e}")
+                    time.sleep(0.5)
         log.info("RSSI poll loop stopped")
+
+    def _update_squelch_reg02(self, reg02: int) -> None:
+        with self._sq_lock:
+            self._squelch_open = squelch_open_from_reg02(reg02, self._squelch_open)
+            sq_open = self._squelch_open
+        self._safe_emit(
+            'on_rssi_update',
+            self._rssi_dbm,
+            self._rssi_raw,
+            self._rssi_s_raw,
+            sq_open,
+        )
+
+    def _emit_hw_rssi(self, raw: int, noise: int = 0, glitch: int = 0) -> None:
+        raw &= 0x1FF
+        dbm = corrected_dbm(raw, self._rx_band)
+        s_raw = raw_to_s_raw(raw, self._rx_band)
+        self._rssi_raw = raw
+        self._rssi_dbm = dbm
+        self._rssi_s_raw = s_raw
+        with self._sq_lock:
+            sq_open = self._squelch_open
+        self._safe_emit('on_rssi_update', dbm, raw, s_raw, sq_open)
 
     async def read_frequency(self, timeout_s: float = 0.5):
         """Read TX frequency from BK4819 regs 0x38+0x39 on demand.
@@ -412,8 +463,12 @@ class RadioConnection:
             return
         cmd = data[0] | (data[1] << 8)
         if cmd == Packet.RSSI_INFO:
-            log.debug(f"RSSI cmd received (deprecated): {data.hex()}")
-            self._safe_emit('on_rssi', data)
+            parsed = parse_rssi_info(data)
+            if parsed:
+                raw, noise, glitch = parsed
+                self._emit_hw_rssi(raw, noise, glitch)
+            else:
+                log.debug(f"RSSI_INFO short packet: {data.hex()}")
         elif cmd == Packet.REGISTER_INFO:
             # RegisterInfo: [cmd:2] [paramLen:2] [reg:2] [val:2]
             log.info(f"RegisterInfo cmd=0x{cmd:04X} raw: {data.hex()}")
@@ -422,8 +477,9 @@ class RadioConnection:
                 reg = data[4] | (data[5] << 8)
                 val = data[6] | (data[7] << 8)
                 log.info(f"Register parsed: reg=0x{reg:04X} val=0x{val:04X} (paramLen={param_len})")
+                if reg == 0x02:
+                    self._update_squelch_reg02(val)
                 # Collect BK4819 regs 0x38+0x39 for frequency read
-                # Only accept registers when we have an active future
                 if reg == 0x38 and self._freq_future and not self._freq_future.done():
                     self._freq_reg38 = val
                 elif reg == 0x39 and self._freq_future and not self._freq_future.done():

@@ -12,7 +12,8 @@ log = logging.getLogger(__name__)
 LCD_LINES = 8
 _FREQ_RE = re.compile(r"(\d{1,3}\.\d{4,5})")
 _RSSI_LINES = (3, 4)
-_RSSI_TEXT_RE = re.compile(r"^-?\d+")
+_RSSI_S_RE = re.compile(r"S(\d)\b")
+_RSSI_OVER_RE = re.compile(r"^\s*-?\d+\s+(\d{1,2})\s*$")
 _VFO_MARKERS = ("▶", "▻", "➤", "▸")
 # Remote UI: upper VFO block lines 1–2, lower block lines 4–5 (type-7 triangle on 1 or 4).
 _VFO_UPPER_LINES = (1, 2)
@@ -23,9 +24,9 @@ class LCDDisplay:
     def __init__(self):
         self.fragments = {i: [] for i in range(LCD_LINES)}
         self.smeter = 0
-        self.rssi = -120
-        self._rssi_history = []
-        self._last_rssi_time = 0.0
+        self.smeter_s_level = 0
+        self.smeter_over_s9 = 0
+        self.meter_s_raw = 0.0
         self.state = 'idle'
         self.battery_v = 0.0
         self.battery_pct = 0
@@ -95,8 +96,6 @@ class LCDDisplay:
             while x > 128: y += 1; x -= 128
             self._add_fragment(x, y, val3 / 6.0, text, False, False)
             self._store_line_frequency(y, text)
-            if y == 3 or y == 4:
-                self._parse_rssi_text(text)
         elif ui_type == 2:
             text = data.decode('ascii', errors='replace') if data else ""
             y = val2 + 1
@@ -118,6 +117,8 @@ class LCDDisplay:
                     self._vfo_markers.pop(i, None)
                     self._vfo_frequencies.pop(i, None)
             self._refresh_active_vfo_line()
+            if val1 <= max(_RSSI_LINES) and val2 >= min(_RSSI_LINES):
+                self._refresh_meter_from_rssi_lines()
         elif ui_type == 6:
             self._process_status(val1, val2, val3, data_len)
         elif ui_type == 7:
@@ -129,52 +130,13 @@ class LCDDisplay:
             self._refresh_active_vfo_line()
             log.debug("VFO marker line=%d filled=%s active=%s", y, filled, self.active_vfo_line)
         elif ui_type == 8:
-            log.info(f"S-Meter type 8: val1={val1} val2={val2} val3={val3}")
-            self.smeter = val1
+            from backend.radio.rssi import firmware_smeter_to_s_raw
 
-    def _parse_rssi_text(self, text):
-        """Extract dBm from radio display text.
-        
-        Formats:
-          Normal:  '-107 S3'   → dBm + S-unit
-          Over S9: '-36  40'   → dBm + dB over S9
-        """
-        try:
-            text = text.strip()
-            parts = text.split()
-            if not parts:
-                return
-            dbm = int(parts[0])
-            self._last_rssi_time = time.time()
-            # Instant value – display text is already stable
-            self.rssi = dbm
-            if len(parts) >= 2:
-                s_part = parts[1]
-                if s_part.startswith('S'):
-                    log.info(f"RSSI from display: dbm={dbm} {s_part}")
-                else:
-                    log.info(f"RSSI from display: dbm={dbm} S9+{s_part}dB")
-            else:
-                log.info(f"RSSI from display: dbm={dbm}")
-        except (ValueError, IndexError):
-            pass
-
-    def check_rssi_timeout(self) -> bool:
-        """Reset RSSI if no new display text; clear stale RSSI fragments on CRT."""
-        if self._last_rssi_time > 0 and time.time() - self._last_rssi_time > 0.5:
-            self.rssi = -120
-            self._last_rssi_time = 0
-            self._clear_rssi_fragments()
-            log.info("RSSI: no display text, resetting to -120")
-            return True
-        return False
-
-    def _clear_rssi_fragments(self) -> None:
-        for line in _RSSI_LINES:
-            self.fragments[line] = [
-                f for f in self.fragments[line]
-                if not _RSSI_TEXT_RE.match(f.get("text", "").strip())
-            ]
+            log.debug("S-Meter type 8: s_level=%s overS9=%s val3=%s", val1, val2, val3)
+            self.smeter = val1 + val2
+            self.smeter_s_level = val1
+            self.smeter_over_s9 = val2
+            self.meter_s_raw = firmware_smeter_to_s_raw(val1, val2)
 
     def _add_fragment(self, x, y, size, text, inverted, bold):
         if y < 0 or y >= LCD_LINES:
@@ -186,6 +148,35 @@ class LCDDisplay:
                 'inverted': inverted, 'bold': bold
             })
             self.fragments[y].sort(key=lambda f: f['x'])
+        if y in _RSSI_LINES:
+            self._refresh_meter_from_rssi_lines()
+
+    def _line_text(self, line: int) -> str:
+        frags = self.fragments.get(line, [])
+        return "".join(f["text"] for f in sorted(frags, key=lambda f: f["x"]))
+
+    def _refresh_meter_from_rssi_lines(self) -> bool:
+        """Parse S-reading from CRT RSSI line text (e.g. '-91 S6'). No text → S0."""
+        parsed = None
+        for line in _RSSI_LINES:
+            text = self._line_text(line).strip()
+            if not text:
+                continue
+            match = _RSSI_S_RE.search(text)
+            if match:
+                parsed = float(match.group(1))
+                break
+            if "S" not in text:
+                over = _RSSI_OVER_RE.match(text)
+                if over:
+                    parsed = min(15.0, 9.0 + min(4, int(over.group(1)) // 10))
+                    break
+        if parsed is None:
+            parsed = 0.0
+        if abs(parsed - self.meter_s_raw) > 0.01:
+            self.meter_s_raw = parsed
+            return True
+        return False
 
     def _process_status(self, val1, val2, val3, data_len):
         parts = []
@@ -234,7 +225,6 @@ class LCDDisplay:
             'fragments': {
                 str(y): self.fragments[y] for y in range(LCD_LINES)
             },
-            'rssi_dbm': self.rssi,
             'smeter': self.smeter,
             'state': self.state,
             'tx': self.state == 'TX',
@@ -326,6 +316,9 @@ class LCDDisplay:
     def clear(self):
         self.fragments = {i: [] for i in range(LCD_LINES)}
         self.smeter = 0
+        self.smeter_s_level = 0
+        self.smeter_over_s9 = 0
+        self.meter_s_raw = 0.0
         self._vfo_markers.clear()
         self._vfo_frequencies.clear()
         self.active_vfo_line = None
