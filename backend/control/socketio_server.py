@@ -86,32 +86,12 @@ def init_radio():
     lcd.on_change(on_lcd_change)
 
     async def handle_ui(ui_type, val1, val2, val3, data_len, data):
+        prev_rssi = lcd.rssi
         lcd.process_ui_packet(ui_type, val1, val2, val3, data_len, data)
+        rssi_timed_out = lcd.check_rssi_timeout()
         _feed_rx_squelch_from_lcd()
-        if ui_type == 6:
+        if ui_type == 6 or rssi_timed_out or lcd.rssi != prev_rssi:
             lcd.flush()
-            lcd.check_rssi_timeout()
-            _feed_rx_squelch_from_lcd()
-            if lcd.rssi == -120:
-                await sio.emit('rssi', {'dbm': -120})
-            else:
-                dbm = lcd.rssi
-                if dbm <= -121: s_unit = "S0"
-                elif dbm <= -115: s_unit = "S1"
-                elif dbm <= -109: s_unit = "S2"
-                elif dbm <= -103: s_unit = "S3"
-                elif dbm <= -97: s_unit = "S4"
-                elif dbm <= -91: s_unit = "S5"
-                elif dbm <= -85: s_unit = "S6"
-                elif dbm <= -79: s_unit = "S7"
-                elif dbm <= -73: s_unit = "S8"
-                elif dbm <= -63: s_unit = "S9"
-                elif dbm <= -53: s_unit = "S9+20"
-                elif dbm <= -43: s_unit = "S9+30"
-                elif dbm <= -33: s_unit = "S9+40"
-                elif dbm <= -23: s_unit = "S9+50"
-                else: s_unit = "S9+60"
-                await sio.emit('rssi', {'dbm': dbm, 's_unit': s_unit})
 
     radio.on_ui = handle_ui
     radio.on_rssi = _on_rssi

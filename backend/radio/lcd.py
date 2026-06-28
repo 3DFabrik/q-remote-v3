@@ -11,6 +11,8 @@ log = logging.getLogger(__name__)
 
 LCD_LINES = 8
 _FREQ_RE = re.compile(r"(\d{1,3}\.\d{4,5})")
+_RSSI_LINES = (3, 4)
+_RSSI_TEXT_RE = re.compile(r"^-?\d+")
 _VFO_MARKERS = ("▶", "▻", "➤", "▸")
 # Remote UI: upper VFO block lines 1–2, lower block lines 4–5 (type-7 triangle on 1 or 4).
 _VFO_UPPER_LINES = (1, 2)
@@ -157,12 +159,22 @@ class LCDDisplay:
         except (ValueError, IndexError):
             pass
 
-    def check_rssi_timeout(self):
-        """Reset RSSI immediately if no new display text since last check."""
+    def check_rssi_timeout(self) -> bool:
+        """Reset RSSI if no new display text; clear stale RSSI fragments on CRT."""
         if self._last_rssi_time > 0 and time.time() - self._last_rssi_time > 0.5:
             self.rssi = -120
             self._last_rssi_time = 0
+            self._clear_rssi_fragments()
             log.info("RSSI: no display text, resetting to -120")
+            return True
+        return False
+
+    def _clear_rssi_fragments(self) -> None:
+        for line in _RSSI_LINES:
+            self.fragments[line] = [
+                f for f in self.fragments[line]
+                if not _RSSI_TEXT_RE.match(f.get("text", "").strip())
+            ]
 
     def _add_fragment(self, x, y, size, text, inverted, bold):
         if y < 0 or y >= LCD_LINES:
@@ -222,6 +234,7 @@ class LCDDisplay:
             'fragments': {
                 str(y): self.fragments[y] for y in range(LCD_LINES)
             },
+            'rssi_dbm': self.rssi,
             'smeter': self.smeter,
             'state': self.state,
             'tx': self.state == 'TX',

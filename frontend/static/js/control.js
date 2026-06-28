@@ -13,8 +13,7 @@ class ControlModule {
         this.connected = false;
         
         // Callbacks
-        this.onDisplayUpdate = null;   // (drawCommands) => {}
-        this.onRssiUpdate = null;      // (dbm, sUnit, sRaw) => {}
+        this.onDisplayUpdate = null;   // (lcdState) => {}
         this.onRadioState = null;      // (state) => {}
         this.onPttStatus = null;       // (active, holder, error, user) => {}
         this.onTone1750Status = null;  // (ok, error) => {}
@@ -55,10 +54,6 @@ class ControlModule {
         
         this.socket.on('lcd_update', (data) => {
             if (this.onDisplayUpdate) this.onDisplayUpdate(data);
-        });
-        
-        this.socket.on('rssi', (data) => {
-            if (this.onRssiUpdate) this.onRssiUpdate(data.dbm, data.s_unit, data.s_raw ?? 0);
         });
         
         this.socket.on('radio_state', (data) => {

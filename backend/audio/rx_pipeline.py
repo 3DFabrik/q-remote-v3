@@ -222,17 +222,13 @@ class RxPipeline:
                     audio_open = rms > self.squelch_threshold
                     signal_open = self._signal_present()
 
-                    # Signal-primary gate: RSSI hold only refreshes while signal is present.
-                    # Audio RMS alone must not keep the gate open after RF drops (prevents long tail).
-                    if signal_open:
+                    # OR gate: open on RF (RSSI) or line audio; hold while either is present
+                    if signal_open or audio_open:
                         want_open = True
                         self._gate_hold_frames = self._gate_hold_count()
                     elif self._gate_hold_frames > 0:
                         want_open = True
                         self._gate_hold_frames -= 1
-                    elif audio_open and self._gate_gain <= 0.001:
-                        want_open = True
-                        self._gate_hold_frames = self._gate_hold_count()
                     else:
                         want_open = False
 

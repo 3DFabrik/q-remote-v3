@@ -118,6 +118,8 @@ export class AnalogSMeter {
         const w = this.canvas.width;
         const h = this.canvas.height;
         ctx.clearRect(0, 0, w, h);
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
 
         ctx.fillStyle = this.bgColor;
         ctx.fillRect(0, 0, w, h);
@@ -134,12 +136,6 @@ export class AnalogSMeter {
         ctx.arc(cx, cy, radius, startAngle, endAngle);
         ctx.lineWidth = 2;
         ctx.strokeStyle = this.scaleColor;
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(cx, cy, radius - 20, startAngle, endAngle);
-        ctx.lineWidth = 0.5;
-        ctx.strokeStyle = this.scaleColor + '40';
         ctx.stroke();
 
         if (this.isTX) {

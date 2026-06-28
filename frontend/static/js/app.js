@@ -2,9 +2,9 @@
  * Q-Remote V3 - Main Application
  */
 
-import { control } from "./control.js?v=4.6";
+import { control } from "./control.js?v=4.7";
 import { DisplayRenderer } from "./display.js?v=1.2";
-import { AnalogSMeter } from "./smeter.js";
+import { AnalogSMeter } from "./smeter.js?v=1.1";
 import { RxAudio } from "./audio.js";
 import { TxAudio } from "./tx_audio.js";
 
@@ -242,28 +242,23 @@ async function init() {
         _lcdTimer = setTimeout(() => {
             if (_pendingLcd) {
                 display.processEvent(_pendingLcd);
+                if (typeof _pendingLcd.rssi_dbm === "number" && !smeter.isTX) {
+                    smeter.updateRX(dbmToSraw(_pendingLcd.rssi_dbm));
+                }
                 _pendingLcd = null;
             }
         }, 50);
     };
 
     function dbmToSraw(dbm) {
-        // Squelch: below -115 dBm (S1) treat as no signal
-        if (dbm <= -115) return 0;
+        // Below -120 dBm: needle at rest (no S reading on meter)
+        if (dbm <= -120) return 0;
         if (dbm >= -13) return 15;
         if (dbm <= -73) {
             return 1 + (dbm - (-121)) / 6;
         }
         return 9 + (-73 - dbm) / (-10);
     }
-
-    control.onRssiUpdate = (dbm, sUnit, sRaw) => {
-        const continuousSraw = dbmToSraw(dbm);
-        smeter.updateRX(continuousSraw);
-        if (dbm <= -115) {
-            rxAudio.flushBuffer();
-        }
-    };
 
     control.onGpioButtons = function(buttons) {
         if (typeof updateGpioButtons === 'function') updateGpioButtons(buttons);
