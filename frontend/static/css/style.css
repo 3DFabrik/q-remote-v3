@@ -387,6 +387,50 @@ header.front-plate::after {
     border-radius: 4px;
 }
 
+/* CRT tube warm-up — starts with first LCD frame (see display.js) */
+@keyframes crt-tube-warmup {
+    0% {
+        filter: brightness(0.05) contrast(1.5) saturate(0.4);
+    }
+    35% {
+        filter: brightness(0.25) contrast(1.35) saturate(0.65);
+    }
+    70% {
+        filter: brightness(0.7) contrast(1.1) saturate(0.92);
+    }
+    100% {
+        filter: brightness(1) contrast(1) saturate(1);
+    }
+}
+
+#display-section.crt-warming #lcd {
+    animation: crt-tube-warmup 3.2s ease-out forwards;
+}
+
+#display-section.crt-warming::after {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border-radius: 4px;
+    background: radial-gradient(ellipse at center, rgba(0, 255, 65, 0.06) 0%, #0a0f0a 70%);
+    pointer-events: none;
+    z-index: 2;
+    animation: crt-bezel-veil 3.2s ease-out forwards;
+}
+
+@keyframes crt-bezel-veil {
+    0% { opacity: 1; }
+    30% { opacity: 0.92; }
+    100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #display-section.crt-warming #lcd,
+    #display-section.crt-warming::after {
+        animation: none;
+    }
+}
+
 /* ─── S-Meter ──────────────────────────────────────────────────── */
 
 #smeter-section {

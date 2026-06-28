@@ -68,6 +68,31 @@ def pcm_to_ulaw(pcm_data: bytes) -> bytes:
     return bytes(result)
 
 
+def _apply_gain_ramp_pcm(pcm_data: bytes, start_gain: float, end_gain: float) -> bytes:
+    """Linear gain ramp across one chunk — softens squelch open/close clicks."""
+    import array
+
+    if start_gain >= 0.999 and end_gain >= 0.999:
+        return pcm_data
+    samples = array.array("h", pcm_data)
+    n = len(samples)
+    if n == 0:
+        return pcm_data
+    if abs(start_gain - end_gain) < 1e-6:
+        g = start_gain
+        if g >= 0.999:
+            return pcm_data
+        for i in range(n):
+            samples[i] = int(max(-32768, min(32767, samples[i] * g)))
+        return samples.tobytes()
+
+    denom = max(1, n - 1)
+    for i in range(n):
+        g = start_gain + (end_gain - start_gain) * (i / denom)
+        samples[i] = int(max(-32768, min(32767, samples[i] * g)))
+    return samples.tobytes()
+
+
 class RxPipeline:
     def __init__(self):
         self._process = None
@@ -81,10 +106,12 @@ class RxPipeline:
         self.signal_threshold_dbm = -115  # RSSI above this opens gate (S-meter)
         self.signal_stale_s = 0.5  # RSSI considered stale after this silence
         self.gate_hold_ms = 200  # keep gate open after signal/audio drops
+        self.gate_attack_ms = 35  # fade-in when opening (reduces punch/click)
+        self.gate_release_ms = 25  # fade-out when closing
         self._signal_lock = threading.Lock()
         self._signal_dbm = -120
         self._signal_updated_at = 0.0
-        self._gate_open = False
+        self._gate_gain = 0.0
         self._gate_hold_frames = 0
 
     def add_client(self, websocket):
@@ -112,6 +139,12 @@ class RxPipeline:
     def _gate_hold_count(self) -> int:
         chunk_ms = (CHUNK_SAMPLES / SAMPLE_RATE) * 1000
         return max(1, round(self.gate_hold_ms / chunk_ms))
+
+    def _gate_ramp_step(self, ms: float) -> float:
+        """Per-chunk gain delta for attack/release envelope."""
+        chunk_ms = (CHUNK_SAMPLES / SAMPLE_RATE) * 1000
+        frames = max(1.0, ms / chunk_ms)
+        return 1.0 / frames
 
     @property
     def has_clients(self):
@@ -179,26 +212,43 @@ class RxPipeline:
                     time.sleep(0.01)
                     continue
 
-                ulaw_data = pcm_to_ulaw(pcm_data)
                 chunk_count += 1
 
-                # Noise gate: audio RMS and/or S-meter RSSI
+                # Noise gate with soft attack/release (avoids punch on open/close)
                 if self.squelch_enabled:
                     import array
                     samples = array.array("h", pcm_data)
                     rms = math.sqrt(sum(s * s for s in samples) / len(samples))
                     audio_open = rms > self.squelch_threshold
                     signal_open = self._signal_present()
-                    if audio_open or signal_open:
-                        self._gate_open = True
+
+                    # Signal-primary gate: RSSI hold only refreshes while signal is present.
+                    # Audio RMS alone must not keep the gate open after RF drops (prevents long tail).
+                    if signal_open:
+                        want_open = True
                         self._gate_hold_frames = self._gate_hold_count()
                     elif self._gate_hold_frames > 0:
+                        want_open = True
                         self._gate_hold_frames -= 1
+                    elif audio_open and self._gate_gain <= 0.001:
+                        want_open = True
+                        self._gate_hold_frames = self._gate_hold_count()
                     else:
-                        self._gate_open = False
+                        want_open = False
 
-                    if not self._gate_open:
-                        continue  # Drop silent/noise chunk
+                    start_gain = self._gate_gain
+                    if want_open:
+                        end_gain = min(1.0, start_gain + self._gate_ramp_step(self.gate_attack_ms))
+                    else:
+                        end_gain = max(0.0, start_gain - self._gate_ramp_step(self.gate_release_ms))
+
+                    self._gate_gain = end_gain
+                    if end_gain <= 0.001:
+                        continue
+
+                    pcm_data = _apply_gain_ramp_pcm(pcm_data, start_gain, end_gain)
+
+                ulaw_data = pcm_to_ulaw(pcm_data)
 
                 if self._clients and self._loop:
                     self._loop.call_soon_threadsafe(

@@ -53,6 +53,8 @@ def apply_squelch_config() -> None:
     rx_audio.squelch_threshold = int(get("audio.squelch_threshold", 300))
     rx_audio.signal_threshold_dbm = int(get("audio.squelch_signal_dbm", -115))
     rx_audio.gate_hold_ms = int(get("audio.squelch_gate_hold_ms", 200))
+    rx_audio.gate_attack_ms = int(get("audio.squelch_gate_attack_ms", 35))
+    rx_audio.gate_release_ms = int(get("audio.squelch_gate_release_ms", 25))
     rx_audio.signal_stale_s = float(get("audio.squelch_signal_stale_s", 0.5))
 
 jinja_env = Environment(
@@ -323,6 +325,8 @@ async def admin_page(request: Request, _=Depends(admin_required)):
         squelch_threshold=rx_audio.squelch_threshold,
         squelch_signal_dbm=rx_audio.signal_threshold_dbm,
         squelch_gate_hold_ms=rx_audio.gate_hold_ms,
+        squelch_gate_attack_ms=rx_audio.gate_attack_ms,
+        squelch_gate_release_ms=rx_audio.gate_release_ms,
         squelch_signal_stale_s=rx_audio.signal_stale_s,
     ))
 
@@ -465,6 +469,8 @@ async def get_squelch(request: Request, _=Depends(admin_required)):
         "threshold": rx_audio.squelch_threshold,
         "signal_dbm": rx_audio.signal_threshold_dbm,
         "gate_hold_ms": rx_audio.gate_hold_ms,
+        "gate_attack_ms": rx_audio.gate_attack_ms,
+        "gate_release_ms": rx_audio.gate_release_ms,
         "signal_stale_s": rx_audio.signal_stale_s,
     }
 
@@ -477,12 +483,16 @@ async def set_squelch(request: Request, _=Depends(admin_required)):
     threshold = max(50, min(5000, int(form.get("squelch_threshold", "300"))))
     signal_dbm = max(-130, min(-40, int(form.get("squelch_signal_dbm", "-115"))))
     gate_hold_ms = max(50, min(1000, int(form.get("squelch_gate_hold_ms", "200"))))
+    gate_attack_ms = max(5, min(500, int(form.get("squelch_gate_attack_ms", "35"))))
+    gate_release_ms = max(5, min(500, int(form.get("squelch_gate_release_ms", "25"))))
     signal_stale_s = max(0.2, min(2.0, float(form.get("squelch_signal_stale_s", "0.5"))))
 
     rx_audio.squelch_enabled = enabled
     rx_audio.squelch_threshold = threshold
     rx_audio.signal_threshold_dbm = signal_dbm
     rx_audio.gate_hold_ms = gate_hold_ms
+    rx_audio.gate_attack_ms = gate_attack_ms
+    rx_audio.gate_release_ms = gate_release_ms
     rx_audio.signal_stale_s = signal_stale_s
 
     cfg_path = Path(__file__).parent.parent / "config.local.yaml"
@@ -494,6 +504,8 @@ async def set_squelch(request: Request, _=Depends(admin_required)):
     audio["squelch_threshold"] = threshold
     audio["squelch_signal_dbm"] = signal_dbm
     audio["squelch_gate_hold_ms"] = gate_hold_ms
+    audio["squelch_gate_attack_ms"] = gate_attack_ms
+    audio["squelch_gate_release_ms"] = gate_release_ms
     audio["squelch_signal_stale_s"] = signal_stale_s
     cfg_path.write_text(yaml.dump(cfg, default_flow_style=False))
 
@@ -501,7 +513,8 @@ async def set_squelch(request: Request, _=Depends(admin_required)):
         get_current_user(request),
         "SQUELCH",
         f"enabled={enabled} rms={threshold} signal_dbm={signal_dbm} "
-        f"hold_ms={gate_hold_ms} stale_s={signal_stale_s}",
+        f"hold_ms={gate_hold_ms} attack_ms={gate_attack_ms} release_ms={gate_release_ms} "
+        f"stale_s={signal_stale_s}",
     )
     return RedirectResponse(url="/admin", status_code=303)
 

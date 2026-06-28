@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Q-Remote V3 – Login</title>
     <link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
         :root {
             --panel: #b8b0a0;
             --panel-dark: #a09888;
@@ -19,13 +19,16 @@
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
+            background: #2a2520;
             background: var(--bg);
+            color: #e8e0d0;
             color: var(--white);
             font-family: 'Share Tech Mono', 'Courier New', monospace;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            color-scheme: dark;
             background-image:
                 repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
         }
@@ -93,10 +96,23 @@
             padding: 10px 12px;
             border: 2px solid var(--panel-border);
             border-radius: 4px;
+            background: #2a2520;
             background: var(--bg);
+            color: #00ff41;
             color: var(--phosphor);
             font-family: 'Share Tech Mono', monospace;
             font-size: 15px;
+            color-scheme: dark;
+        }
+        .form-group input:-webkit-autofill,
+        .form-group input:-webkit-autofill:hover,
+        .form-group input:-webkit-autofill:focus {
+            -webkit-text-fill-color: #00ff41;
+            -webkit-text-fill-color: var(--phosphor);
+            -webkit-box-shadow: 0 0 0 1000px #2a2520 inset;
+            -webkit-box-shadow: 0 0 0 1000px var(--bg) inset;
+            caret-color: #00ff41;
+            caret-color: var(--phosphor);
         }
         .form-group input:focus {
             outline: none;

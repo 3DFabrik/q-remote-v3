@@ -21,6 +21,8 @@ audio:
   squelch_threshold: 300       # audio RMS (50=open … 5000=tight)
   squelch_signal_dbm: -115     # S-meter RSSI must exceed this (dBm)
   squelch_gate_hold_ms: 200    # close delay after signal/audio lost
+  squelch_gate_attack_ms: 35   # fade-in when gate opens (ms)
+  squelch_gate_release_ms: 25  # fade-out when gate closes (ms)
   squelch_signal_stale_s: 0.5  # ignore RSSI older than this (seconds)
 
 server:

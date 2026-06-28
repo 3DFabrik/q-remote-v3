@@ -3,7 +3,7 @@
  */
 
 import { control } from "./control.js?v=4.6";
-import { DisplayRenderer } from "./display.js";
+import { DisplayRenderer } from "./display.js?v=1.2";
 import { AnalogSMeter } from "./smeter.js";
 import { RxAudio } from "./audio.js";
 import { TxAudio } from "./tx_audio.js";
@@ -260,6 +260,9 @@ async function init() {
     control.onRssiUpdate = (dbm, sUnit, sRaw) => {
         const continuousSraw = dbmToSraw(dbm);
         smeter.updateRX(continuousSraw);
+        if (dbm <= -115) {
+            rxAudio.flushBuffer();
+        }
     };
 
     control.onGpioButtons = function(buttons) {

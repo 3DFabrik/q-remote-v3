@@ -11,6 +11,7 @@ export class RxAudio {
         this.connected = false;
         this.muted = false;
         this._pcmBuffer = [];
+        this._maxBufferSamples = 960; // ~120 ms at 8 kHz — low latency
         this._reconnectTimer = null;
         this.onConnectionChange = null;  // (connected: boolean) => {}
 
@@ -71,7 +72,7 @@ export class RxAudio {
             for (let i = 0; i < bytes.length; i++) {
                 this._pcmBuffer.push(this._ulawTable[bytes[i]]);
             }
-            while (this._pcmBuffer.length > 16000) {
+            while (this._pcmBuffer.length > this._maxBufferSamples) {
                 this._pcmBuffer.shift();
             }
         };
@@ -86,6 +87,10 @@ export class RxAudio {
         this.ws.onerror = (e) => {
             console.error("[RxAudio] WebSocket error:", e);
         };
+    }
+
+    flushBuffer() {
+        this._pcmBuffer.length = 0;
     }
 
     stop() {
