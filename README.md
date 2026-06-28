@@ -4,7 +4,7 @@ Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmwa
 
 > **Special thanks to [Nic Sure](https://github.com/nicsure) for the amazing [QuanshengDock](https://github.com/nicsure/QuanshengDock) project – the firmware, protocol documentation, and C# reference implementation that made Q-Remote V3 possible. Without this foundational work, none of this would exist. 🙏
 
-![Q-Remote V3 – main control panel with CRT display, S-meter, and transmitter keypad](docs/screenshot.jpg)
+![Q-Remote V3 – main control panel with CRT display, S-meter, and transmitter keypad](docs/screenshot-main.jpg)
 
 *Equipment chassis UI: CRT display with phosphor warm-up, analog S-meter, 1750 Hz tone, PTT, and full UV-K5 keypad.*
 
