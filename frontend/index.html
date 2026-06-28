@@ -4,12 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Q-Remote V3</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=5.8">
+    <link rel="stylesheet" href="/static/css/style.css?v=6.5">
 </head>
 <body>
     <div id="app">
-        <!-- Title Plate -->
-        <header>
+        <div class="equipment-chassis">
+        <!-- Front plate (virtual chassis face) -->
+        <header class="front-plate">
             <div class=header-brand>
                 <h1>Q-Remote V3</h1>
                 <div class="status-indicator">
@@ -53,16 +54,19 @@
             </div>
         </header>
 
+        <div class="module-bay">
         <!-- CRT Display Panel -->
-        <div id="crt-bezel" class="instrument-panel">
+        <div id="crt-panel" class="instrument-panel crt-panel module-insert">
             <div class="panel-label">Display — CRT Type 564</div>
-            <div id="display-section">
-                <canvas id="lcd" width="128" height="64"></canvas>
+            <div class="crt-bezel">
+                <div id="display-section">
+                    <canvas id="lcd" width="128" height="64"></canvas>
+                </div>
             </div>
         </div>
 
         <!-- S-Meter + PTT Panel (GPIO strip under S-meter) -->
-        <div class="instrument-panel smeter-panel">
+        <div class="instrument-panel smeter-panel module-insert">
             <div class="panel-label">Signal Strength — S-Meter</div>
             <div id="smeter-ptt-row">
                 <div id="smeter-column">
@@ -93,7 +97,7 @@
         </div>
 
         <!-- Controls Panel -->
-        <div class="instrument-panel">
+        <div class="instrument-panel module-insert">
             <div class="panel-label">Transmitter Control</div>
             <section id="controls">
                 <!-- Button Grid (4×4 like real UV-K5) -->
@@ -121,9 +125,11 @@
 
             </section>
         </div>
+        </div><!-- .module-bay -->
+        </div><!-- .equipment-chassis -->
     </div>
 
-    <script type="module" src="/static/js/app.js?v=4.6"></script>
+    <script type="module" src="/static/js/app.js?v=4.7"></script>
 
 
 <script>

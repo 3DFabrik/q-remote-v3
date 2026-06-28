@@ -61,6 +61,75 @@ body {
     width: 100%;
 }
 
+/* ─── Equipment chassis (front plate + module bay) ─────────────── */
+
+.equipment-chassis {
+    width: 100%;
+    background: linear-gradient(165deg, #9a9284 0%, #7a7268 45%, #6a6258 100%);
+    border: 3px solid #5a5248;
+    border-radius: 10px;
+    box-shadow:
+        0 10px 28px rgba(0, 0, 0, 0.55),
+        inset 0 1px 0 rgba(255, 255, 255, 0.22),
+        inset 0 -2px 5px rgba(0, 0, 0, 0.18);
+    overflow: hidden;
+}
+
+header.front-plate {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px 10px;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    background: linear-gradient(180deg, #cec6b6 0%, #b8b0a0 50%, #a89f90 100%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.35),
+        inset 0 -2px 6px rgba(0, 0, 0, 0.12);
+    position: relative;
+}
+
+header.front-plate::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: linear-gradient(
+        180deg,
+        rgba(0, 0, 0, 0.22) 0%,
+        rgba(0, 0, 0, 0.08) 40%,
+        transparent 100%
+    );
+    pointer-events: none;
+}
+
+.module-bay {
+    padding: 3px;
+    background: linear-gradient(180deg, #2e2a24 0%, #221e18 100%);
+    box-shadow: inset 0 5px 12px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.module-bay > .instrument-panel {
+    margin-bottom: 0;
+    border-radius: 4px;
+    padding: 12px 14px;
+    border: 1px solid #484038;
+    box-shadow:
+        inset 0 2px 6px rgba(0, 0, 0, 0.32),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+        0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.module-bay > .instrument-panel::before,
+.module-bay > .instrument-panel::after {
+    display: none;
+}
+
 .instrument-panel {
     background: var(--panel);
     border-radius: 6px;
@@ -163,24 +232,35 @@ body {
     padding: 0 4px;
 }
 
-#crt-bezel.instrument-panel {
-    padding: 16px;
+#crt-panel.instrument-panel {
+    padding: 12px 14px;
 }
 
-/* ─── Header ───────────────────────────────────────────────────── */
+/* ─── CRT Display ──────────────────────────────────────────────── */
 
-
-/* ── Header ────────────────────────────────────── */
-header {
-    display: flex;
-    align-items: center;
-    padding: 8px 16px;
-    background: linear-gradient(180deg, #c8c0b0 0%, #b0a898 100%);
+.crt-panel .crt-bezel {
+    width: 100%;
+    background: var(--panel-inner);
+    border-radius: 8px;
+    padding: 8px;
     border: 2px solid var(--panel-border);
-    border-radius: 6px;
-    margin-bottom: 12px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.45);
+    box-sizing: border-box;
 }
+
+#display-section {
+    position: relative;
+    background: var(--crt-bg);
+    border-radius: 6px;
+    padding: 4px;
+    border: 2px solid #2a2824;
+    box-shadow:
+        inset 0 0 24px rgba(0, 255, 65, 0.04),
+        inset 0 0 48px rgba(0, 0, 0, 0.85),
+        0 1px 0 rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+}
+
 .header-brand {
     display: flex;
     flex-direction: column;
@@ -299,31 +379,6 @@ header {
         0 0 16px rgba(204,34,0,0.3);
 }
 
-/* ─── CRT Display ──────────────────────────────────────────────── */
-
-#crt-bezel {
-    background: var(--panel-inner);
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 12px;
-    border: 2px solid var(--panel-border);
-    box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
-}
-
-#display-section {
-    position: relative;
-    background: var(--crt-bg);
-    border-radius: 16px;
-    padding: 4px;
-    border: 3px solid #333;
-    box-shadow: 
-        inset 0 0 30px rgba(0,255,65,0.05),
-        inset 0 0 60px rgba(0,0,0,0.8);
-    overflow: hidden;
-}
-
-/* CRT effects disabled for readability - Tektronix sharpness! */
-
 #lcd {
     width: 100%;
     max-width: 384px;
@@ -340,7 +395,7 @@ header {
 
 .smeter-panel {
     padding: 10px 12px 4px;
-    margin-bottom: 10px;
+    margin-bottom: 0;
 }
 
 .smeter-panel .panel-label {
@@ -542,8 +597,6 @@ header {
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
 }
 
-/* Function keys removed – using UV-K5 layout */
-
 /* Menu/Exit – amber label */
 .radio-btn.nav-key {
     color: var(--amber);
@@ -554,8 +607,6 @@ header {
 .radio-btn.btn-exit {
     color: #ff6644;
 }
-
-/* Arrow keys – same size as others */
 
 /* F button – blue accent */
 .radio-btn.btn-f {

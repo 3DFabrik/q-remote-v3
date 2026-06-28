@@ -38,6 +38,18 @@ _rssi_raw_history = []
 _RSSI_HISTORY_LEN = 10
 
 
+def _feed_rx_squelch_from_lcd() -> None:
+    """Push current LCD RSSI into the RX noise gate (same logic as S-meter)."""
+    if not lcd:
+        return
+    lcd.check_rssi_timeout()
+    try:
+        from backend.app import rx_audio
+        rx_audio.update_signal_dbm(lcd.rssi)
+    except Exception as exc:
+        logger.debug("RX squelch RSSI feed failed: %s", exc)
+
+
 def _get_user_from_environ(environ: dict) -> Optional[str]:
     """Extract username from session cookie in SocketIO environ."""
     try:
@@ -75,9 +87,11 @@ def init_radio():
 
     async def handle_ui(ui_type, val1, val2, val3, data_len, data):
         lcd.process_ui_packet(ui_type, val1, val2, val3, data_len, data)
+        _feed_rx_squelch_from_lcd()
         if ui_type == 6:
             lcd.flush()
             lcd.check_rssi_timeout()
+            _feed_rx_squelch_from_lcd()
             if lcd.rssi == -120:
                 await sio.emit('rssi', {'dbm': -120})
             else:

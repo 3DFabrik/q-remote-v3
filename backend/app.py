@@ -46,6 +46,15 @@ TEMPLATES_DIR = FRONTEND_DIR / "templates"
 rx_audio = RxPipeline()
 tx_audio = TxPipeline()
 
+
+def apply_squelch_config() -> None:
+    """Load RX squelch settings from config into the live pipeline."""
+    rx_audio.squelch_enabled = bool(get("audio.squelch_enabled", True))
+    rx_audio.squelch_threshold = int(get("audio.squelch_threshold", 300))
+    rx_audio.signal_threshold_dbm = int(get("audio.squelch_signal_dbm", -115))
+    rx_audio.gate_hold_ms = int(get("audio.squelch_gate_hold_ms", 200))
+    rx_audio.signal_stale_s = float(get("audio.squelch_signal_stale_s", 0.5))
+
 jinja_env = Environment(
     loader=FileSystemLoader(str(TEMPLATES_DIR)),
     autoescape=True,
@@ -119,9 +128,15 @@ async def lifespan(app: FastAPI):
         logger.info("Radio connected")
         rx_audio.start(asyncio.get_event_loop())
         try:
-            rx_audio.squelch_enabled = get("audio.squelch_enabled", True)
-            rx_audio.squelch_threshold = get("audio.squelch_threshold", 300)
-            logger.info(f"Squelch: enabled={rx_audio.squelch_enabled}, threshold={rx_audio.squelch_threshold}")
+            apply_squelch_config()
+            logger.info(
+                "Squelch: enabled=%s rms=%s signal_dbm=%s hold_ms=%s stale_s=%s",
+                rx_audio.squelch_enabled,
+                rx_audio.squelch_threshold,
+                rx_audio.signal_threshold_dbm,
+                rx_audio.gate_hold_ms,
+                rx_audio.signal_stale_s,
+            )
         except Exception as e:
             logger.warning(f"Could not load squelch config: {e}")
         tx_audio.start()
@@ -306,6 +321,9 @@ async def admin_page(request: Request, _=Depends(admin_required)):
         request=request, users=USERS, current_user=get_current_user(request),
         squelch_enabled=rx_audio.squelch_enabled,
         squelch_threshold=rx_audio.squelch_threshold,
+        squelch_signal_dbm=rx_audio.signal_threshold_dbm,
+        squelch_gate_hold_ms=rx_audio.gate_hold_ms,
+        squelch_signal_stale_s=rx_audio.signal_stale_s,
     ))
 
 
@@ -445,27 +463,46 @@ async def get_squelch(request: Request, _=Depends(admin_required)):
     return {
         "enabled": rx_audio.squelch_enabled,
         "threshold": rx_audio.squelch_threshold,
+        "signal_dbm": rx_audio.signal_threshold_dbm,
+        "gate_hold_ms": rx_audio.gate_hold_ms,
+        "signal_stale_s": rx_audio.signal_stale_s,
     }
 
 
 @app.post("/api/squelch")
 async def set_squelch(request: Request, _=Depends(admin_required)):
-    from backend.config import load_config, get
+    import yaml
     form = await request.form()
     enabled = form.get("squelch_enabled") == "on"
-    threshold = int(form.get("squelch_threshold", "300"))
-    threshold = max(10, min(10000, threshold))
+    threshold = max(50, min(5000, int(form.get("squelch_threshold", "300"))))
+    signal_dbm = max(-130, min(-40, int(form.get("squelch_signal_dbm", "-115"))))
+    gate_hold_ms = max(50, min(1000, int(form.get("squelch_gate_hold_ms", "200"))))
+    signal_stale_s = max(0.2, min(2.0, float(form.get("squelch_signal_stale_s", "0.5"))))
+
     rx_audio.squelch_enabled = enabled
     rx_audio.squelch_threshold = threshold
+    rx_audio.signal_threshold_dbm = signal_dbm
+    rx_audio.gate_hold_ms = gate_hold_ms
+    rx_audio.signal_stale_s = signal_stale_s
+
     cfg_path = Path(__file__).parent.parent / "config.local.yaml"
-    import yaml
     cfg = {}
     if cfg_path.exists():
         cfg = yaml.safe_load(cfg_path.read_text()) or {}
-    cfg.setdefault("audio", {})["squelch_enabled"] = enabled
-    cfg["audio"]["squelch_threshold"] = threshold
+    audio = cfg.setdefault("audio", {})
+    audio["squelch_enabled"] = enabled
+    audio["squelch_threshold"] = threshold
+    audio["squelch_signal_dbm"] = signal_dbm
+    audio["squelch_gate_hold_ms"] = gate_hold_ms
+    audio["squelch_signal_stale_s"] = signal_stale_s
     cfg_path.write_text(yaml.dump(cfg, default_flow_style=False))
-    log_activity(get_current_user(request), "SQUELCH", f"enabled={enabled} threshold={threshold}")
+
+    log_activity(
+        get_current_user(request),
+        "SQUELCH",
+        f"enabled={enabled} rms={threshold} signal_dbm={signal_dbm} "
+        f"hold_ms={gate_hold_ms} stale_s={signal_stale_s}",
+    )
     return RedirectResponse(url="/admin", status_code=303)
 
 

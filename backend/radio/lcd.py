@@ -3,11 +3,18 @@ LCD display - pixel-positioned text rendering matching QuanshengDock.
 Ported from V1's lcd.py - processes type 5/6 UI packets into fragment state.
 """
 import logging
+import re
 import time
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
 LCD_LINES = 8
+_FREQ_RE = re.compile(r"(\d{1,3}\.\d{4,5})")
+_VFO_MARKERS = ("▶", "▻", "➤", "▸")
+# Remote UI: upper VFO block lines 1–2, lower block lines 4–5 (type-7 triangle on 1 or 4).
+_VFO_UPPER_LINES = (1, 2)
+_VFO_LOWER_LINES = (4, 5)
 
 
 class LCDDisplay:
@@ -23,7 +30,9 @@ class LCDDisplay:
         self.indicators = {}
         self._last_state = None
         self._last_push = 0.0
-        self.active_vfo_line = None
+        self.active_vfo_line: Optional[int] = None
+        self._vfo_markers: dict[int, bool] = {}
+        self._vfo_frequencies: dict[int, float] = {}
         self._change_callbacks = []
 
     def on_change(self, callback):
@@ -65,21 +74,26 @@ class LCDDisplay:
 
     def process_ui_packet(self, ui_type, val1, val2, val3, data_len, data):
         if ui_type in (0, 1, 2, 3) and data:
-            log.info(f"UI text type={ui_type} x={val1} y={val2} sz={val3} text='{data.decode('ascii', errors='replace')}'")
+            log.debug(
+                "UI text type=%s x=%s y=%s sz=%s text='%s'",
+                ui_type, val1, val2, val3,
+                data.decode('ascii', errors='replace'),
+            )
         if ui_type == 0:
             text = data.decode('ascii', errors='replace') if data else ""
             y = val2 + 1
             x = val1
             while x > 128: y += 1; x -= 128
             self._add_fragment(x, y, 1.5, text, False, False)
+            self._store_line_frequency(y, text)
         elif ui_type == 1:
             text = data.decode('ascii', errors='replace') if data else ""
             y = val2 + 1
             x = val1
             while x > 128: y += 1; x -= 128
             self._add_fragment(x, y, val3 / 6.0, text, False, False)
-            # Parse RSSI from display line y=3 (signal info line)
-            if y == 3 or y == 4:  # y=3 on single-VFO, y=4 possible on dual
+            self._store_line_frequency(y, text)
+            if y == 3 or y == 4:
                 self._parse_rssi_text(text)
         elif ui_type == 2:
             text = data.decode('ascii', errors='replace') if data else ""
@@ -87,24 +101,31 @@ class LCDDisplay:
             x = val1
             while x > 128: y += 1; x -= 128
             self._add_fragment(x, y, val3 / 6.0, text, True, True)
+            self._store_line_frequency(y, text)
         elif ui_type == 3:
             text = data.decode('ascii', errors='replace') if data else ""
             y = val2 + 1
             x = val1
             while x > 128: y += 1; x -= 128
             self._add_fragment(x, y, 2.0, text, False, True)
+            self._store_line_frequency(y, text)
         elif ui_type == 5:
             for i in range(val1, val2 + 1):
                 if i > 0 and i < LCD_LINES:
                     self.fragments[i] = []
+                    self._vfo_markers.pop(i, None)
+                    self._vfo_frequencies.pop(i, None)
+            self._refresh_active_vfo_line()
         elif ui_type == 6:
             self._process_status(val1, val2, val3, data_len)
         elif ui_type == 7:
             y = val1
-            marker = '▻' if val2 == 0 else '▶'
+            filled = val2 != 0
+            self._vfo_markers[y] = filled
+            marker = "▶" if filled else "▻"
             self._add_fragment(0, y, 1.0, marker, False, False)
-            if val2 != 0:
-                self.active_vfo_line = y
+            self._refresh_active_vfo_line()
+            log.debug("VFO marker line=%d filled=%s active=%s", y, filled, self.active_vfo_line)
         elif ui_type == 8:
             log.info(f"S-Meter type 8: val1={val1} val2={val2} val3={val3}")
             self.smeter = val1
@@ -208,9 +229,91 @@ class LCDDisplay:
             'battery_v': self.battery_v,
             'battery_pct': self.battery_pct,
             'indicators': dict(self.indicators),
+            'active_vfo_line': self.active_vfo_line,
         }
+
+    def _refresh_active_vfo_line(self) -> None:
+        filled = [line for line, is_filled in self._vfo_markers.items() if is_filled]
+        if len(filled) == 1:
+            self.active_vfo_line = filled[0]
+        elif not filled:
+            self.active_vfo_line = None
+        else:
+            self.active_vfo_line = min(filled)
+
+    @staticmethod
+    def _parse_freq_text(text: str) -> Optional[float]:
+        if not text or text in _VFO_MARKERS:
+            return None
+        match = _FREQ_RE.search(text)
+        if not match:
+            return None
+        try:
+            value = float(match.group(1))
+        except ValueError:
+            return None
+        if 100.0 <= value <= 999.99999:
+            return value
+        return None
+
+    def _store_line_frequency(self, line: int, text: str) -> None:
+        freq = self._parse_freq_text(text)
+        if freq is not None:
+            self._vfo_frequencies[line] = freq
+
+    def _vfo_block_lines(self, anchor: Optional[int]) -> tuple[int, ...]:
+        if anchor is None:
+            return _VFO_UPPER_LINES + _VFO_LOWER_LINES
+        if anchor in _VFO_UPPER_LINES or anchor < 3:
+            return _VFO_UPPER_LINES
+        return _VFO_LOWER_LINES
+
+    def _frequency_on_line(self, line: int) -> Optional[float]:
+        if line in self._vfo_frequencies:
+            return self._vfo_frequencies[line]
+        for frag in self.fragments.get(line, []):
+            freq = self._parse_freq_text(frag.get("text", ""))
+            if freq is not None:
+                self._vfo_frequencies[line] = freq
+                return freq
+        return None
+
+    def parse_active_vfo_frequency_mhz(self) -> Optional[float]:
+        """Frequency of the VFO marked by the filled triangle (UI type 7)."""
+        lines = self._vfo_block_lines(self.active_vfo_line)
+        if self.active_vfo_line is not None:
+            ordered = (self.active_vfo_line,) + tuple(
+                ln for ln in lines if ln != self.active_vfo_line
+            )
+        else:
+            ordered = lines
+        for line in ordered:
+            freq = self._frequency_on_line(line)
+            if freq is not None:
+                return freq
+        return self.parse_frequency_mhz()
+
+    def parse_frequency_mhz(self) -> Optional[float]:
+        """First frequency found on the display (fallback)."""
+        for line in range(LCD_LINES):
+            freq = self._frequency_on_line(line)
+            if freq is not None:
+                return freq
+        return None
+
+    def active_vfo_label(self) -> str:
+        if self.active_vfo_line is None:
+            return "?"
+        if self.active_vfo_line in _VFO_UPPER_LINES:
+            return "A"
+        if self.active_vfo_line in _VFO_LOWER_LINES:
+            return "B"
+        return str(self.active_vfo_line)
 
     def clear(self):
         self.fragments = {i: [] for i in range(LCD_LINES)}
         self.smeter = 0
+        self._vfo_markers.clear()
+        self._vfo_frequencies.clear()
+        self.active_vfo_line = None
 

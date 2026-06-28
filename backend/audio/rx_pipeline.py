@@ -75,12 +75,17 @@ class RxPipeline:
         self._thread = None
         self._clients: Set = set()
         self._loop = None
-        # Noise gate (squelch)
+        # Noise gate (squelch) — opens on audio RMS and/or S-meter signal (RSSI)
         self.squelch_enabled = True
         self.squelch_threshold = 300  # RMS threshold (0-32768), ~-40dB
+        self.signal_threshold_dbm = -115  # RSSI above this opens gate (S-meter)
+        self.signal_stale_s = 0.5  # RSSI considered stale after this silence
+        self.gate_hold_ms = 200  # keep gate open after signal/audio drops
+        self._signal_lock = threading.Lock()
+        self._signal_dbm = -120
+        self._signal_updated_at = 0.0
         self._gate_open = False
         self._gate_hold_frames = 0
-        self._GATE_HOLD = 10  # keep gate open for 10 frames (200ms) after signal drops
 
     def add_client(self, websocket):
         self._clients.add(websocket)
@@ -89,6 +94,24 @@ class RxPipeline:
     def remove_client(self, websocket):
         self._clients.discard(websocket)
         log.info(f"RX audio client removed ({len(self._clients)} total)")
+
+    def update_signal_dbm(self, dbm: int) -> None:
+        """Feed RSSI from radio LCD (same source as S-meter). Thread-safe."""
+        with self._signal_lock:
+            self._signal_dbm = int(dbm)
+            self._signal_updated_at = time.monotonic()
+
+    def _signal_present(self) -> bool:
+        with self._signal_lock:
+            if self._signal_updated_at <= 0:
+                return False
+            if time.monotonic() - self._signal_updated_at > self.signal_stale_s:
+                return False
+            return self._signal_dbm > self.signal_threshold_dbm
+
+    def _gate_hold_count(self) -> int:
+        chunk_ms = (CHUNK_SAMPLES / SAMPLE_RATE) * 1000
+        return max(1, round(self.gate_hold_ms / chunk_ms))
 
     @property
     def has_clients(self):
@@ -159,14 +182,16 @@ class RxPipeline:
                 ulaw_data = pcm_to_ulaw(pcm_data)
                 chunk_count += 1
 
-                # Noise gate: compute RMS of PCM chunk
+                # Noise gate: audio RMS and/or S-meter RSSI
                 if self.squelch_enabled:
                     import array
                     samples = array.array("h", pcm_data)
                     rms = math.sqrt(sum(s * s for s in samples) / len(samples))
-                    if rms > self.squelch_threshold:
+                    audio_open = rms > self.squelch_threshold
+                    signal_open = self._signal_present()
+                    if audio_open or signal_open:
                         self._gate_open = True
-                        self._gate_hold_frames = self._GATE_HOLD
+                        self._gate_hold_frames = self._gate_hold_count()
                     elif self._gate_hold_frames > 0:
                         self._gate_hold_frames -= 1
                     else:

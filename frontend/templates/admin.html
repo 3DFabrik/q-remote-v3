@@ -206,6 +206,49 @@
         #gpio-table input[type="text"] { width: 100px; }
         .gpio-param-wrap { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
         .gpio-btn-del { padding: 3px 8px; font-size: 0.7rem; }
+        .squelch-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 520px;
+        }
+        .sq-row {
+            display: grid;
+            grid-template-columns: 88px 1fr;
+            gap: 6px 10px;
+            align-items: center;
+            color: #504840;
+            font-size: 0.75rem;
+        }
+        .sq-row-check {
+            grid-template-columns: auto 1fr;
+        }
+        .sq-row-check input { transform: scale(1.2); }
+        .sq-label { font-weight: bold; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; }
+        .sq-hint {
+            grid-column: 2;
+            color: #706858;
+            font-size: 0.6rem;
+            font-style: italic;
+        }
+        .squelch-form input[type="number"],
+        .squelch-form input[type="range"] {
+            accent-color: #ffaa00;
+        }
+        .squelch-form input[type="number"] {
+            width: 72px;
+            background: var(--bg);
+            border: 1px solid var(--panel-border);
+            color: var(--phosphor);
+            padding: 5px;
+            border-radius: 3px;
+            font-family: 'Share Tech Mono', monospace;
+        }
+        .squelch-form input[name="squelch_threshold_slider"] {
+            width: 100%;
+            max-width: 180px;
+        }
+        .squelch-form .btn-save { align-self: flex-start; margin-top: 4px; }
     </style>
 </head>
 <body>
@@ -266,20 +309,34 @@
             <!-- RX Squelch -->
             <details class="section">
                 <summary><h2>🎧 RX Squelch (Noise Gate)</h2></summary>
-                <form method="POST" action="/api/squelch" class="add-form" style="flex-wrap:wrap;">
-                    <label style="display:flex;align-items:center;gap:6px;">
-                        <input type="checkbox" name="squelch_enabled" {% if squelch_enabled %}checked{% endif %} style="transform:scale(1.3)">
-                        <span style="color:#504840;font-size:0.8rem;">Enabled</span>
+                <p class="hint" style="margin:6px 0 10px;">Opens browser RX audio when <strong>audio level</strong> or <strong>S-meter RSSI</strong> exceeds the limits. Saved to config.local.yaml.</p>
+                <form method="POST" action="/api/squelch" class="squelch-form">
+                    <label class="sq-row sq-row-check">
+                        <input type="checkbox" name="squelch_enabled" {% if squelch_enabled %}checked{% endif %}>
+                        <span>Enabled</span>
                     </label>
-                    <label style="display:flex;align-items:center;gap:6px;">
-                        <span style="color:#504840;font-size:0.8rem;">Threshold:</span>
+                    <label class="sq-row">
+                        <span class="sq-label">Audio RMS</span>
                         <input type="range" name="squelch_threshold_slider" min="50" max="5000" value="{{ squelch_threshold }}"
-                               oninput="document.getElementById('sq-val').value=this.value"
-                               style="width:150px;accent-color:#ffaa00;">
-                        <input type="number" id="sq-val" name="squelch_threshold" value="{{ squelch_threshold }}" min="50" max="5000"
-                               oninput="document.querySelector('input[name=squelch_threshold_slider]').value=this.value"
-                               style="width:70px;background:var(--bg);border:1px solid var(--panel-border);color:var(--phosphor);padding:5px;border-radius:3px;font-family:'Share Tech Mono',monospace;">
-                        <span style="color:#706858;font-size:0.65rem;">RMS (50 = open, 5000 = tight)</span>
+                               oninput="document.getElementById('sq-rms-val').value=this.value">
+                        <input type="number" id="sq-rms-val" name="squelch_threshold" value="{{ squelch_threshold }}" min="50" max="5000"
+                               oninput="document.querySelector('input[name=squelch_threshold_slider]').value=this.value">
+                        <span class="sq-hint">50 = sensitive · 5000 = strict</span>
+                    </label>
+                    <label class="sq-row">
+                        <span class="sq-label">Signal dBm</span>
+                        <input type="number" name="squelch_signal_dbm" value="{{ squelch_signal_dbm }}" min="-130" max="-40" step="1">
+                        <span class="sq-hint">Open when S-meter RSSI exceeds this (default −115 ≈ S1)</span>
+                    </label>
+                    <label class="sq-row">
+                        <span class="sq-label">Hold ms</span>
+                        <input type="number" name="squelch_gate_hold_ms" value="{{ squelch_gate_hold_ms }}" min="50" max="1000" step="10">
+                        <span class="sq-hint">Close delay after signal or audio drops</span>
+                    </label>
+                    <label class="sq-row">
+                        <span class="sq-label">RSSI timeout s</span>
+                        <input type="number" name="squelch_signal_stale_s" value="{{ squelch_signal_stale_s }}" min="0.2" max="2" step="0.1">
+                        <span class="sq-hint">No fresh S-meter update → signal treated as gone</span>
                     </label>
                     <button type="submit" class="btn btn-save">SAVE</button>
                 </form>

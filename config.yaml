@@ -16,6 +16,12 @@ audio:
   device_rx: "default"        # ALSA capture device
   device_tx: "default"        # ALSA playback device
   max_chunk_ms: 200           # adaptive: max chunk size on bad connections
+  # RX noise gate (admin panel → config.local.yaml)
+  squelch_enabled: true
+  squelch_threshold: 300       # audio RMS (50=open … 5000=tight)
+  squelch_signal_dbm: -115     # S-meter RSSI must exceed this (dBm)
+  squelch_gate_hold_ms: 200    # close delay after signal/audio lost
+  squelch_signal_stale_s: 0.5  # ignore RSSI older than this (seconds)
 
 server:
   host: "0.0.0.0"

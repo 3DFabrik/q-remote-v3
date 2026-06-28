@@ -66,7 +66,7 @@ Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmwa
 - **Activity Logging** – Login, logout, failed logins, PTT, GPIO, and admin actions
 
 ### 🔧 In Progress
-- Spectrum bandscope (SCAN protocol 0x0808 working, UI pending)
+- Spectrum bandscope MVP (panel under S-Meter, SCAN 0x0808)
 
 ## Architecture
 
