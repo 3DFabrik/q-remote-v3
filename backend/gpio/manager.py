@@ -67,6 +67,9 @@ TRIGGER_LABELS = {
     TRIGGER_TEMP: "Temperature Threshold",
 }
 
+# UI temperature display: background refresh only (avoid 1-Wire reads every HTTP poll).
+DISPLAY_TEMP_REFRESH_S = 30
+
 
 # ─── Data Models ───────────────────────────────────────────────────
 
@@ -189,6 +192,8 @@ class GPIOManager:
         self._active_users: set[str] = set()
         self._initialized = False
         self._temp_task = None
+        self._display_temp_task: asyncio.Task | None = None
+        self._display_temp_cache: list[dict] | None = None
 
     # ─── Config ─────────────────────────────────────
 
@@ -263,6 +268,9 @@ class GPIOManager:
         self.all_off()
         # Start temperature monitor for temp-trigger pins
         self._start_temp_monitor()
+        if self._has_display_temps():
+            self._refresh_display_temperatures()
+            self._start_display_temp_loop()
         output_count = len(self._handles)
         sensor_count = sum(
             1 for c in self._configs
@@ -295,6 +303,41 @@ class GPIOManager:
             self._temp_task.cancel()
             logger.info("Temperature monitor task stopped")
         self._temp_task = None
+
+    def _has_display_temps(self) -> bool:
+        return any(
+            c.input_type == "ds18b20" and c.show_temp
+            for c in self._configs
+        )
+
+    def _start_display_temp_loop(self):
+        """Refresh cached UI temperatures on a fixed interval (not per HTTP request)."""
+        self._stop_display_temp_loop()
+        if not self._has_display_temps():
+            return
+        self._display_temp_task = asyncio.create_task(self._display_temp_loop())
+        logger.info(
+            "Display temperature cache task started (%ss interval)",
+            DISPLAY_TEMP_REFRESH_S,
+        )
+
+    def _stop_display_temp_loop(self):
+        if self._display_temp_task and not self._display_temp_task.done():
+            self._display_temp_task.cancel()
+            logger.info("Display temperature cache task stopped")
+        self._display_temp_task = None
+        self._display_temp_cache = None
+
+    async def _display_temp_loop(self):
+        """Background loop: refresh DS18B20 cache for the main-page temperature display."""
+        while True:
+            try:
+                await asyncio.sleep(DISPLAY_TEMP_REFRESH_S)
+                self._refresh_display_temperatures()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Display temperature refresh error: {e}", exc_info=True)
 
     async def _temp_monitor_loop(self):
         """Background loop: evaluate temp-trigger pins every 5 seconds."""
@@ -423,6 +466,7 @@ class GPIOManager:
     def cleanup(self):
         """Release all pins. Fail-safe: everything OFF first, then release."""
         self._stop_temp_monitor()
+        self._stop_display_temp_loop()
         self.all_off()
         for handle in self._handles.values():
             handle.close()
@@ -641,13 +685,17 @@ class GPIOManager:
     # --- Temperature Sensors (DS18B20) ---
 
     def get_temperatures(self) -> list[dict]:
-        """Read all configured DS18B20 sensors and return their current values.
+        """Return cached DS18B20 readings for the main-page temperature display.
 
-        Returns a list of dicts: [{name, id, temp, pin, error?}, ...]
-        Always returns an entry for every sensor with show_temp=True,
-        even if the temperature cannot be read (temp=null, error=reason).
-        Reads from /sys/bus/w1/devices/<sensor_id>/w1_slave (standard 1-Wire).
+        1-Wire conversion is done in the background (_display_temp_loop) so frequent
+        browser polls do not hammer the bus and couple noise into AIOC RX audio.
         """
+        if self._display_temp_cache is None:
+            self._refresh_display_temperatures()
+        return list(self._display_temp_cache or [])
+
+    def _refresh_display_temperatures(self) -> list[dict]:
+        """Read all show_temp DS18B20 sensors and update the display cache."""
         results = []
         w1_base = Path("/sys/bus/w1/devices")
 
@@ -714,6 +762,7 @@ class GPIOManager:
 
             results.append(entry)
 
+        self._display_temp_cache = results
         return results
 
     def get_sensor_temp(self, sensor_name: str) -> float | None:

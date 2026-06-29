@@ -299,28 +299,33 @@
                 </form>
             </details>
 
-            <!-- RX Squelch -->
+            <!-- RX noise gate (browser) -->
             <details class="section">
-                <summary><h2>🎧 RX Squelch (Noise Gate)</h2></summary>
-                <p class="hint" style="margin:6px 0 10px;"><strong>Off (recommended):</strong> no extra gate — browser audio follows the radio squelch only (AIOC). <strong>On:</strong> additional software gate in Q-Remote (usually not needed).</p>
+                <summary><h2>🎧 RX Noise Gate (Browser)</h2></summary>
+                <p class="hint" style="margin:6px 0 10px;">Gate runs <strong>in each client browser</strong> on received RX audio (RMS level). The server always sends raw AIOC audio. Lower threshold = more sensitive (opens easier).</p>
                 <form method="POST" action="/api/squelch" class="squelch-form">
                     <label class="sq-row sq-row-check">
-                        <input type="checkbox" name="squelch_enabled" {% if squelch_enabled %}checked{% endif %}>
+                        <input type="checkbox" name="client_rx_gate_enabled" {% if client_rx_gate_enabled %}checked{% endif %}>
                         <span>Enabled</span>
                     </label>
                     <label class="sq-row">
+                        <span class="sq-label">Threshold</span>
+                        <input type="number" name="client_rx_gate_threshold" value="{{ client_rx_gate_threshold }}" min="50" max="5000" step="50">
+                        <span class="sq-hint">RMS 50 = open (quiet hiss passes) … 5000 = tight</span>
+                    </label>
+                    <label class="sq-row">
                         <span class="sq-label">Hold ms</span>
-                        <input type="number" name="squelch_gate_hold_ms" value="{{ squelch_gate_hold_ms }}" min="50" max="3000" step="50">
-                        <span class="sq-hint">Keep gate open after squelch closes (default 1000 ms)</span>
+                        <input type="number" name="client_rx_gate_hold_ms" value="{{ client_rx_gate_hold_ms }}" min="50" max="3000" step="50">
+                        <span class="sq-hint">Keep gate open after level drops (default 1000 ms)</span>
                     </label>
                     <label class="sq-row">
                         <span class="sq-label">Attack ms</span>
-                        <input type="number" name="squelch_gate_attack_ms" value="{{ squelch_gate_attack_ms }}" min="5" max="500" step="5">
+                        <input type="number" name="client_rx_gate_attack_ms" value="{{ client_rx_gate_attack_ms }}" min="5" max="3000" step="5">
                         <span class="sq-hint">Fade-in when opening — higher = softer, less punch</span>
                     </label>
                     <label class="sq-row">
                         <span class="sq-label">Release ms</span>
-                        <input type="number" name="squelch_gate_release_ms" value="{{ squelch_gate_release_ms }}" min="5" max="500" step="5">
+                        <input type="number" name="client_rx_gate_release_ms" value="{{ client_rx_gate_release_ms }}" min="5" max="3000" step="5">
                         <span class="sq-hint">Fade-out when closing — reduces click on squelch close</span>
                     </label>
                     <button type="submit" class="btn btn-save">SAVE</button>

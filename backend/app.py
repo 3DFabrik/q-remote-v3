@@ -47,12 +47,28 @@ rx_audio = RxPipeline()
 tx_audio = TxPipeline()
 
 
+def get_client_rx_gate_config() -> dict:
+    """Browser RX noise gate settings (applied client-side in audio.js)."""
+    threshold = int(get("audio.client_rx_gate_threshold", get("audio.squelch_threshold", 300)))
+    threshold = max(50, min(5000, threshold))
+    hold_ms = int(get("audio.client_rx_gate_hold_ms", get("audio.squelch_gate_hold_ms", 1000)))
+    hold_ms = max(50, min(3000, hold_ms))
+    attack_ms = int(get("audio.client_rx_gate_attack_ms", get("audio.squelch_gate_attack_ms", 2000)))
+    attack_ms = max(5, min(3000, attack_ms))
+    release_ms = int(get("audio.client_rx_gate_release_ms", get("audio.squelch_gate_release_ms", 2000)))
+    release_ms = max(5, min(3000, release_ms))
+    return {
+        "enabled": bool(get("audio.client_rx_gate_enabled", True)),
+        "threshold": threshold,
+        "hold_ms": hold_ms,
+        "attack_ms": attack_ms,
+        "release_ms": release_ms,
+    }
+
+
 def apply_squelch_config() -> None:
-    """Load RX squelch settings from config into the live pipeline."""
-    rx_audio.squelch_enabled = bool(get("audio.squelch_enabled", False))
-    rx_audio.gate_hold_ms = int(get("audio.squelch_gate_hold_ms", 1000))
-    rx_audio.gate_attack_ms = int(get("audio.squelch_gate_attack_ms", 35))
-    rx_audio.gate_release_ms = int(get("audio.squelch_gate_release_ms", 25))
+    """Server RX pipeline stays passthrough; gate is client-side only."""
+    rx_audio.squelch_enabled = False
 
 jinja_env = Environment(
     loader=FileSystemLoader(str(TEMPLATES_DIR)),
@@ -128,12 +144,12 @@ async def lifespan(app: FastAPI):
         rx_audio.start(asyncio.get_event_loop())
         try:
             apply_squelch_config()
+            gate = get_client_rx_gate_config()
             logger.info(
-                "Squelch: enabled=%s hold_ms=%s attack_ms=%s release_ms=%s (BK4819 chip)",
-                rx_audio.squelch_enabled,
-                rx_audio.gate_hold_ms,
-                rx_audio.gate_attack_ms,
-                rx_audio.gate_release_ms,
+                "RX gate: server=off client enabled=%s threshold=%s hold_ms=%s",
+                gate["enabled"],
+                gate["threshold"],
+                gate["hold_ms"],
             )
         except Exception as e:
             logger.warning(f"Could not load squelch config: {e}")
@@ -315,12 +331,14 @@ async def logout(request: Request):
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request, _=Depends(admin_required)):
+    gate = get_client_rx_gate_config()
     return HTMLResponse(jinja_env.get_template("admin.html").render(
         request=request, users=USERS, current_user=get_current_user(request),
-        squelch_enabled=rx_audio.squelch_enabled,
-        squelch_gate_hold_ms=rx_audio.gate_hold_ms,
-        squelch_gate_attack_ms=rx_audio.gate_attack_ms,
-        squelch_gate_release_ms=rx_audio.gate_release_ms,
+        client_rx_gate_enabled=gate["enabled"],
+        client_rx_gate_threshold=gate["threshold"],
+        client_rx_gate_hold_ms=gate["hold_ms"],
+        client_rx_gate_attack_ms=gate["attack_ms"],
+        client_rx_gate_release_ms=gate["release_ms"],
     ))
 
 
@@ -453,48 +471,50 @@ async def audio_tx_ws(websocket: WebSocket):
         logger.info("TX audio WebSocket client disconnected")
 
 
-# ─── Squelch Settings API ──────────────────────────────────────────
+# ─── RX gate (client-side, configured via admin) ───────────────────
+
+@app.get("/api/audio/rx-gate")
+async def get_rx_gate_config(request: Request, _=Depends(login_required)):
+    """Noise gate settings for browser RX audio (audio.js)."""
+    return get_client_rx_gate_config()
+
 
 @app.get("/api/squelch")
 async def get_squelch(request: Request, _=Depends(admin_required)):
-    return {
-        "enabled": rx_audio.squelch_enabled,
-        "gate_hold_ms": rx_audio.gate_hold_ms,
-        "gate_attack_ms": rx_audio.gate_attack_ms,
-        "gate_release_ms": rx_audio.gate_release_ms,
-    }
+    return get_client_rx_gate_config()
 
 
 @app.post("/api/squelch")
 async def set_squelch(request: Request, _=Depends(admin_required)):
     import yaml
     form = await request.form()
-    enabled = form.get("squelch_enabled") == "on"
-    gate_hold_ms = max(50, min(3000, int(form.get("squelch_gate_hold_ms", "1000"))))
-    gate_attack_ms = max(5, min(500, int(form.get("squelch_gate_attack_ms", "35"))))
-    gate_release_ms = max(5, min(500, int(form.get("squelch_gate_release_ms", "25"))))
+    enabled = form.get("client_rx_gate_enabled") == "on"
+    threshold = max(50, min(5000, int(form.get("client_rx_gate_threshold", "300"))))
+    hold_ms = max(50, min(3000, int(form.get("client_rx_gate_hold_ms", "1000"))))
+    attack_ms = max(5, min(3000, int(form.get("client_rx_gate_attack_ms", "35"))))
+    release_ms = max(5, min(3000, int(form.get("client_rx_gate_release_ms", "25"))))
 
-    rx_audio.squelch_enabled = enabled
-    rx_audio.gate_hold_ms = gate_hold_ms
-    rx_audio.gate_attack_ms = gate_attack_ms
-    rx_audio.gate_release_ms = gate_release_ms
+    rx_audio.squelch_enabled = False
 
     cfg_path = Path(__file__).parent.parent / "config.local.yaml"
     cfg = {}
     if cfg_path.exists():
         cfg = yaml.safe_load(cfg_path.read_text()) or {}
     audio = cfg.setdefault("audio", {})
-    audio["squelch_enabled"] = enabled
-    audio["squelch_gate_hold_ms"] = gate_hold_ms
-    audio["squelch_gate_attack_ms"] = gate_attack_ms
-    audio["squelch_gate_release_ms"] = gate_release_ms
+    audio["squelch_enabled"] = False
+    audio["client_rx_gate_enabled"] = enabled
+    audio["client_rx_gate_threshold"] = threshold
+    audio["client_rx_gate_hold_ms"] = hold_ms
+    audio["client_rx_gate_attack_ms"] = attack_ms
+    audio["client_rx_gate_release_ms"] = release_ms
     cfg_path.write_text(yaml.dump(cfg, default_flow_style=False))
+    load_config(force_reload=True)
 
     log_activity(
         get_current_user(request),
-        "SQUELCH",
-        f"enabled={enabled} hold_ms={gate_hold_ms} "
-        f"attack_ms={gate_attack_ms} release_ms={gate_release_ms}",
+        "RX_GATE",
+        f"client enabled={enabled} threshold={threshold} hold_ms={hold_ms} "
+        f"attack_ms={attack_ms} release_ms={release_ms}",
     )
     return RedirectResponse(url="/admin", status_code=303)
 

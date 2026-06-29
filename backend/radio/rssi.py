@@ -83,12 +83,16 @@ def parse_rssi_info(data: bytes) -> tuple[int, int, int] | None:
     return raw, noise, glitch
 
 
-def squelch_open_from_reg02(reg02: int, previous: bool) -> bool:
-    """Track squelch like the MCU: FOUND opens, LOST closes, else hold state."""
-    # Flags may appear in either byte depending on REGISTER_INFO wire order.
+def squelch_open_from_reg02(reg02: int, previous: bool, last_flags: int = 0) -> tuple[bool, int]:
+    """Track squelch from BK4819 reg 0x02 edge flags (FOUND/LOST pulses).
+
+    Returns (open, flags) so the caller can pass last_flags on the next poll.
+    Level-style sticky FOUND without a new edge does not re-open the gate.
+    """
     flags = (reg02 & 0xFF) | ((reg02 >> 8) & 0xFF)
-    if flags & REG02_SQUELCH_FOUND:
-        return True
-    if flags & REG02_SQUELCH_LOST:
-        return False
-    return previous
+    open_ = previous
+    if (flags & REG02_SQUELCH_FOUND) and not (last_flags & REG02_SQUELCH_FOUND):
+        open_ = True
+    if (flags & REG02_SQUELCH_LOST) and not (last_flags & REG02_SQUELCH_LOST):
+        open_ = False
+    return open_, flags

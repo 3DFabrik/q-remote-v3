@@ -200,6 +200,7 @@ function releasePttLocal(reason) {
     _pttOnSent = false;
     pttBtn.classList.remove("active");
     smeter.leaveTX(0);
+    rxAudio.muted = false;
     pttNetStatus.textContent = "";
     updateToneButtonState();
 }
@@ -372,6 +373,7 @@ function releasePttButton() {
     txAudio.stopTransmit();
     pttBtn.classList.remove("active");
     smeter.leaveTX(0);
+    rxAudio.muted = false;
     updateToneButtonState();
 }
 

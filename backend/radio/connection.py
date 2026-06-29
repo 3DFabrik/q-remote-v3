@@ -51,12 +51,14 @@ class RadioConnection:
 
         # RSSI polling
         self._rssi_thread = None
-        self._rssi_interval = 0.2  # 200ms — GET_RSSI + reg 0x02 squelch
+        self._rssi_poll_enabled = bool(get("radio.rssi_poll_enabled", True))
+        self._rssi_interval = float(get("radio.rssi_poll_interval_s", 0.2))
         self._rssi_raw = 0
         self._rssi_dbm = -120
         self._rssi_s_raw = 0.0
         self._rx_band = 0
         self._squelch_open = False
+        self._sq_reg02_flags = 0
         self._sq_lock = threading.Lock()
         # Frequency read-on-demand (no continuous polling)
         self._freq_reg38 = None
@@ -103,9 +105,11 @@ class RadioConnection:
 
             log.info("Radio init complete - Remote UI active")
             self._safe_emit('on_connect')
-            # Start RSSI polling (BK4819 register 0x67)
-            self._rssi_thread = threading.Thread(target=self._rssi_poll_loop, daemon=True)
-            self._rssi_thread.start()
+            if self._rssi_poll_enabled:
+                self._rssi_thread = threading.Thread(target=self._rssi_poll_loop, daemon=True)
+                self._rssi_thread.start()
+            else:
+                log.warning("RSSI serial polling DISABLED (radio.rssi_poll_enabled=false)")
             return True
         except Exception as e:
             log.error(f"Failed to connect to radio: {e}")
@@ -372,17 +376,12 @@ class RadioConnection:
         self.set_rx_band(mhz_to_band(mhz))
 
     def _rssi_poll_loop(self):
-        """Poll BK4819 via GET_RSSI (0x527) and squelch status reg 0x02 (200 ms)."""
-        log.info("RSSI poll loop started (GET_RSSI + BK4819 reg 0x02)")
-        tick = 0
+        """Poll BK4819 RSSI via GET_RSSI (0x527). Squelch reg 0x02 is not polled."""
+        log.info("RSSI poll loop started (GET_RSSI every %.0f ms)", self._rssi_interval * 1000)
         while self._running and self.connected:
             try:
                 if not self._eeprom_mode:
-                    if tick % 2 == 0:
-                        self.request_rssi()
-                    else:
-                        self.read_register(0x02)
-                tick += 1
+                    self.request_rssi()
                 time.sleep(self._rssi_interval)
             except Exception as e:
                 if self._running:
@@ -392,7 +391,9 @@ class RadioConnection:
 
     def _update_squelch_reg02(self, reg02: int) -> None:
         with self._sq_lock:
-            self._squelch_open = squelch_open_from_reg02(reg02, self._squelch_open)
+            self._squelch_open, self._sq_reg02_flags = squelch_open_from_reg02(
+                reg02, self._squelch_open, self._sq_reg02_flags
+            )
             sq_open = self._squelch_open
         self._safe_emit(
             'on_rssi_update',
@@ -442,7 +443,7 @@ class RadioConnection:
                 if self.port and self.port.is_open:
                     raw = self.port.read(256)
                     if raw:
-                        log.info(f"Serial read {len(raw)} bytes: {raw[:40].hex()}")
+                        log.debug(f"Serial read {len(raw)} bytes: {raw[:40].hex()}")
                         self.parser.feed(
                             raw,
                             on_command=self._on_command,
@@ -471,12 +472,12 @@ class RadioConnection:
                 log.debug(f"RSSI_INFO short packet: {data.hex()}")
         elif cmd == Packet.REGISTER_INFO:
             # RegisterInfo: [cmd:2] [paramLen:2] [reg:2] [val:2]
-            log.info(f"RegisterInfo cmd=0x{cmd:04X} raw: {data.hex()}")
+            log.debug(f"RegisterInfo cmd=0x{cmd:04X} raw: {data.hex()}")
             if len(data) >= 8:
                 param_len = data[2] | (data[3] << 8)
                 reg = data[4] | (data[5] << 8)
                 val = data[6] | (data[7] << 8)
-                log.info(f"Register parsed: reg=0x{reg:04X} val=0x{val:04X} (paramLen={param_len})")
+                log.debug(f"Register parsed: reg=0x{reg:04X} val=0x{val:04X} (paramLen={param_len})")
                 if reg == 0x02:
                     self._update_squelch_reg02(val)
                 # Collect BK4819 regs 0x38+0x39 for frequency read

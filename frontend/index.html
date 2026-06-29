@@ -129,7 +129,7 @@
         </div><!-- .equipment-chassis -->
     </div>
 
-    <script type="module" src="/static/js/app.js?v=5.8"></script>
+    <script type="module" src="/static/js/app.js?v=6.7"></script>
 
 
 <script>
@@ -275,7 +275,7 @@
     // Start polling on page load
     document.addEventListener('DOMContentLoaded', function() {
         loadTemperatures();
-        _tempPollTimer = setInterval(loadTemperatures, 5000);
+        _tempPollTimer = setInterval(loadTemperatures, 30000);
     });
 
     function updateGpioButtons(buttons) {

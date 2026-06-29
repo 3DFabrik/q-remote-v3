@@ -8,6 +8,8 @@ radio:
   timeout: 1.0
   reconnect_delay: 3.0        # seconds between reconnect attempts
   type: "uvk5"                # Radio type: "uvk5" (future: "hamlib")
+  rssi_poll_interval_s: 0.2   # unused while rssi_poll_enabled is false
+  rssi_poll_enabled: false    # S-meter uses firmware UI (0xB5 type 8), not GET_RSSI
 
 audio:
   sample_rate: 8000
@@ -16,11 +18,13 @@ audio:
   device_rx: "default"        # ALSA capture device
   device_tx: "default"        # ALSA playback device
   max_chunk_ms: 200           # adaptive: max chunk size on bad connections
-  # RX noise gate (admin panel → config.local.yaml)
-  squelch_enabled: false         # false = only radio BK4819 squelch via AIOC (recommended)
-  squelch_gate_hold_ms: 1000   # keep gate open after BK4819 squelch closes (ms)
-  squelch_gate_attack_ms: 35   # fade-in when gate opens (ms)
-  squelch_gate_release_ms: 25  # fade-out when gate closes (ms)
+  # Server RX gate off — noise gate runs in the browser (admin → client_rx_gate_*)
+  squelch_enabled: false
+  client_rx_gate_enabled: true
+  client_rx_gate_threshold: 300   # RMS 50=open … 5000=tight (same scale as legacy server gate)
+  client_rx_gate_hold_ms: 1000    # keep gate open after level drops (ms)
+  client_rx_gate_attack_ms: 2000   # fade-in when gate opens (browser)
+  client_rx_gate_release_ms: 2000  # fade-out when gate closes (browser)
 
 server:
   host: "0.0.0.0"
