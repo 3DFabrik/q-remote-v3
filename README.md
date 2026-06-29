@@ -1,5 +1,7 @@
 # Q-Remote V3 🤖📻
 
+**v1.0 — First stable release**
+
 Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmware. Access your radio from anywhere through the browser – live CRT display, complete control, GPIO peripherals, and a full channel editor. The main UI is styled as a vintage equipment chassis with backlit keys and a CRT-style display panel.
 
 > **Special thanks to [Nic Sure](https://github.com/nicsure) for the amazing [QuanshengDock](https://github.com/nicsure/QuanshengDock) project – the firmware, protocol documentation, and C# reference implementation that made Q-Remote V3 possible. Without this foundational work, none of this would exist. 🙏
@@ -16,32 +18,42 @@ Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmwa
 
 ![TX MOD Meter](docs/screenshot-tx-mod.jpg)
 
-*Stations editor – full channel management with squelch control:*
+*Stations editor – full channel management:*
 
 ![Stations Editor](docs/screenshot-stations.jpg)
 
-*Admin panel – user management, GPIO matrix, squelch:*
+*Admin panel – user management, GPIO matrix, RX noise gate:*
 
 ![Admin Panel](docs/screenshot-admin.jpg)
 
+## What's in v1.0
+
+- **Full remote operation** – CRT display, keypad, PTT, RX/TX audio, S-meter, 1750 Hz tone
+- **Stations editor** – read/write all 200 EEPROM channels with backup/restore and CSV import/export
+- **GPIO matrix** – PTT sequencer, header buttons, DS18B20 temperature triggers and display
+- **Multi-user** – login, per-user timeout, PTT lock, session-safe GPIO, activity log
+- **Browser RX noise gate** – configurable threshold, hold, attack/release (server sends raw AIOC audio)
+- **Stable RX audio** – tuned jitter buffer eliminates periodic artifacts on marginal links
+- **Pi installer** – one-shot `install.sh` with systemd service
+
 ## Features
 
-### ✅ Working
+### Radio Control
 
-**Radio Control**
 - **Live CRT Display** – Radio LCD rendered in real-time on HTML5 Canvas with anti-flicker and phosphor warm-up after login
 - **Equipment Chassis UI** – Retro rack-style control panel with CRT bezel, module bays, and backlit keypad buttons
-- **RX Audio** – Listen to incoming radio audio in your browser (μ-law codec, 8 kHz)
+- **RX Audio** – Listen to incoming radio audio in your browser (μ-law, 8 kHz, ~200 ms jitter buffer)
 - **TX Audio** – Transmit through your browser's microphone (μ-law, click-free)
+- **Browser RX Noise Gate** – RMS-based gate in each client; threshold, hold, attack/release configurable in admin (defaults: 2000 ms fade)
 - **Full Button Control** – 4×4 button grid matching the UV-K5 layout with correct labels
 - **PTT (Push-to-Talk)** – Hold to transmit, with TX lock for multi-user safety
 - **1750 Hz Tone** – One-touch tone burst for repeater access
-- **Analog S-Meter** – Real-time signal strength needle with continuous dBm mapping
+- **Analog S-Meter** – Driven by firmware UI packets (type 8); no serial RSSI polling required
 - **Mic Modulation Meter** – dBFS level display during transmit (MOD scale)
-- **RX Squelch** – Configurable threshold with RSSI/audio gating, hold time, and attack/release envelope (admin panel)
 - **Connection LEDs** – Header indicators for Socket.IO (IO), RX audio, and TX audio WebSockets
 
-**Stations Editor**
+### Stations Editor
+
 - **Full Channel Management** – Read/write all 200 channels directly from the radio EEPROM
 - **Inline Editing** – Edit any channel parameter directly in the data grid
 - **CSV Import/Export** – Import and export channel lists as CSV files
@@ -49,27 +61,27 @@ Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmwa
 - **Empty Channel Handling** – Empty channels are correctly hidden from the radio's channel scan
 - **Auto-Reset After Write** – Radio MCU resets automatically after EEPROM write to reload channel data
 
-**GPIO & Peripherals** (Raspberry Pi)
+### GPIO & Peripherals (Raspberry Pi)
+
 - **GPIO Matrix** – Configure pins in the admin panel (outputs, triggers, labels)
 - **Triggers** – PTT sequencer delay, header buttons, temperature threshold
 - **Session-safe pins** – Optional per-pin watchdog: pin turns off on logout, tab close, or lost connection (~90 s without heartbeat)
-- **DS18B20** – 1-Wire temperature sensor on GPIO 4 (display + temp-trigger source)
+- **DS18B20** – 1-Wire temperature sensor on GPIO 4 (display + temp-trigger source); UI reads use a 30 s background cache
 - **Header GPIO buttons** – Toggle buttons in the main UI bar (when configured)
 - **Fail-safe** – GPIO outputs forced off on service stop / crash cleanup
 
-**Multi-User & Security**
+### Multi-User & Security
+
 - **Login System** – Multi-user authentication with admin panel
 - **User Management** – Add/remove users, set admin privileges and per-user timeout
 - **Per-User Session Timeout** – Configurable inactivity timeout (HH:MM) per user
-  - Default: 2 hours; `00:00` = unlimited
-  - Automatic logout on timeout with redirect to login
-  - Tab/window close triggers logout for that session
 - **Session binding** – Sessions invalidated after server restart (re-login required)
 - **Login rate limiting** – Per-IP brute-force protection (configurable lockout)
 - **PTT Locking** – Only one user can transmit at a time
 - **Activity Logging** – Login, logout, failed logins, PTT, GPIO, and admin actions
 
-### 🔧 In Progress
+### Planned
+
 - Spectrum bandscope MVP (panel under S-Meter, SCAN 0x0808)
 
 ## Architecture
@@ -83,6 +95,8 @@ Web-based remote control for Quansheng UV-K5 ham radio with QuanshengDock firmwa
 | Radio Protocol | Quansheng UV-K5 Serial Protocol (QuanshengDock firmware) |
 | GPIO | gpiozero + sysfs (DS18B20) |
 | Sound Card | AIOC (All-In-One-Cable) for ALSA audio I/O |
+
+**Audio path:** Server captures AIOC via ALSA (`arecord`) and streams raw μ-law to the browser. The **noise gate runs client-side** in `audio.js`. Serial UART is used for display, keys, and PTT — not for RX audio.
 
 ## Hardware
 
@@ -151,11 +165,25 @@ Open `https://your-domain` in your browser. Plain HTTP works for RX and control,
 | File | Purpose |
 |------|---------|
 | `config.yaml` | Default settings (in git) |
-| `config.local.yaml` | Local overrides (gitignored) — radio device, logging, rate limits |
+| `config.local.yaml` | Local overrides (gitignored) — radio device, logging, rate limits, RX gate |
 | `users.json` | User accounts and passwords (gitignored) |
 | `config.local.yaml` → `gpio.pins` | GPIO matrix (also editable via admin UI) |
 
-Copy `config.local.yaml.example` to get started. GPIO pin definitions saved in the admin panel are written to `config.local.yaml`.
+Copy `config.local.yaml.example` to get started. GPIO pin definitions and RX gate settings saved in the admin panel are written to `config.local.yaml`.
+
+**RX noise gate** (admin → *RX Noise Gate (Browser)*, or `config.local.yaml`):
+
+```yaml
+audio:
+  squelch_enabled: false          # server stays passthrough
+  client_rx_gate_enabled: true
+  client_rx_gate_threshold: 300   # RMS 50…5000 (lower = more sensitive)
+  client_rx_gate_hold_ms: 1000
+  client_rx_gate_attack_ms: 2000
+  client_rx_gate_release_ms: 2000
+```
+
+**Serial / S-meter:** `radio.rssi_poll_enabled: false` by default — the S-meter uses firmware UI packets, not `GET_RSSI` polling.
 
 **Auth / rate limiting** (`config.yaml` or `config.local.yaml`):
 
@@ -193,7 +221,7 @@ q-remote-v3/
 │   ├── login_guard.py      # Login rate limiting (per IP)
 │   ├── radio/              # Serial protocol, LCD, EEPROM
 │   ├── audio/              # ALSA ↔ WebSocket pipelines
-│   ├── control/            # Socket.IO server (PTT, keys, RSSI)
+│   ├── control/            # Socket.IO server (PTT, keys, display)
 │   ├── gpio/               # GPIO manager + REST API
 │   └── stations/           # Channel editor API + EEPROM parser
 ├── frontend/
